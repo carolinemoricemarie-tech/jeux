@@ -1,0 +1,16 @@
+import { build } from 'esbuild';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const result=await build({entryPoints:[path.join(root,'game.mjs')],bundle:true,write:false,format:'iife',target:'es2020',minify:true,legalComments:'inline',plugins:[{name:'embed-photographic-assets',setup(b){b.onLoad({filter:/[/\\]assets\.mjs$/},async()=>{const {PHOTO_URLS}=await import(new URL('../assets.mjs',import.meta.url));const urls={};for(const [key,file] of Object.entries(PHOTO_URLS)){const bytes=await readFile(path.join(root,file));const mime=path.extname(file)==='.webp'?'image/webp':'image/png';urls[key]='data:'+mime+';base64,'+bytes.toString('base64');}return{contents:'export const PHOTO_URLS='+JSON.stringify(urls)+';',loader:'js'};});}}]});
+let html=await readFile(path.join(root,'index.html'),'utf8');
+const css=await readFile(path.join(root,'style.css'),'utf8');
+const license=await readFile(path.join(root,'vendor/THREE-LICENSE.txt'),'utf8');
+const script=result.outputFiles[0].text.replaceAll('</script','<\\/script');
+html=html.replace('<link rel="stylesheet" href="style.css">',()=>'<style>\n'+css+'\n</style>');
+html=html.replace('<script type="module" src="game.mjs"></script>',()=>'<script>\n'+script+'\n</script>');
+html=html.replace('</html>','<!-- Three.js 0.170.0 — '+license.replaceAll('--','—')+' -->\n</html>');
+await mkdir(path.join(root,'dist'),{recursive:true});
+const dest=path.join(root,'dist/les-crins-magiques-realiste.html');await writeFile(dest,html);
+console.log(`Jeu autonome créé : ${dest} (${Math.round(Buffer.byteLength(html)/1024)} Ko). Aucune requête externe nécessaire.`);

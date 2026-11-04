@@ -1,59 +1,114 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, advance, jump, FINISH, HORSE_X } from '../engine.mjs';
+import { createGame, jump, advance, resetToTarget, localToGate, BOUNDS, COURSES, MAX_MISSES } from '../engine.mjs';
 
-test('Un saut revient au sol et ne permet pas de double saut',()=>{
-  const game=createGame();
-  assert.equal(jump(game),true);
-  advance(game,.1);
-  assert.ok(game.height>0);
-  assert.equal(jump(game),false);
-  for(let i=0;i<120;i++)advance(game,1/120);
-  assert.equal(game.height,0);
-  assert.equal(game.velocity,0);
-  assert.equal(jump(game),true);
+function approach(game,index=game.next,distance=3,side=0){
+  const gate=game.obstacles[index];
+  game.x=gate.x+Math.sin(gate.yaw)*distance+Math.cos(gate.yaw)*side;
+  game.z=gate.z+Math.cos(gate.yaw)*distance-Math.sin(gate.yaw)*side;
+  game.heading=gate.yaw;game.speed=4.8;
+}
+function run(game,seconds,input={}){
+  const events=[];for(let i=0;i<Math.ceil(seconds*120);i++)events.push(...advance(game,1/120,input));return events;
+}
+test('Les flèches tournent réellement dans la carrière, dans les deux sens',()=>{
+  const left=createGame(),right=createGame();run(left,1,{left:true});run(right,1,{right:true});
+  assert.ok(left.heading>0&&left.x<0);assert.ok(right.heading<0&&right.x>0);
+  assert.ok(Math.abs(left.x+right.x)<.001);assert.ok(left.z<40&&right.z<40);
+});
+test('Accélérer, relâcher et freiner changent l’allure sans mouvement bloqué',()=>{
+  const game=createGame();run(game,2.5,{up:true});assert.equal(game.speed,9);
+  run(game,1);assert.equal(game.speed,4.8);
+  run(game,1,{down:true});assert.equal(game.speed,0);
+  const point={x:game.x,z:game.z};run(game,1,{down:true});assert.equal(game.x,point.x);assert.equal(game.z,point.z);
+});
+test('Un saut a une vraie hauteur, interdit le double saut et revient au sol',()=>{
+  const game=createGame();assert.equal(jump(game),true);run(game,.2);
+  assert.ok(game.height>1);assert.equal(jump(game),false);run(game,1.5);
+  assert.equal(game.height,0);assert.equal(game.velocity,0);assert.equal(jump(game),true);
+});
+test('Passer au sol compte une barrière touchée une fois, sans défaite',()=>{
+  const game=createGame();approach(game);const events=run(game,1);
+  assert.ok(events.includes('bump'));assert.equal(game.next,1);assert.equal(game.bumps,1);
+  assert.equal(game.cleared,0);assert.equal(game.status,'playing');
+  run(game,.5);assert.equal(game.bumps,1);
+});
+test('Un saut au-dessus du bon obstacle rapporte un saut réussi et trois étoiles',()=>{
+  const game=createGame();approach(game);jump(game);
+  const events=run(game,1);assert.ok(events.includes('clear'));
+  assert.equal(game.cleared,1);assert.equal(game.stars,3);assert.equal(game.next,1);
+});
+test('Contourner le bon obstacle compte une erreur et Me replacer vise le suivant',()=>{
+  const game=createGame();approach(game,0,3,6);jump(game);run(game,1.5);
+  assert.equal(game.next,1);assert.equal(game.cleared,0);assert.equal(game.bumps,1);
+  assert.equal(resetToTarget(game),true);assert.equal(game.speed,0);
+  assert.ok(Math.abs(localToGate(game.obstacles[1],game.x,game.z).side)<.001);
+  assert.ok(localToGate(game.obstacles[1],game.x,game.z).forward>10);
+  approach(game);jump(game);run(game,1);assert.equal(game.next,2);
+});
+test('Les obstacles doivent être passés dans l’ordre et dans le bon sens',()=>{
+  const game=createGame();approach(game,1);jump(game);run(game,1.5);assert.equal(game.next,0);
+  approach(game,0,-3);game.heading+=Math.PI;jump(game);run(game,1.5);assert.equal(game.next,0);
+});
+test('La pause fige la position, le saut et le temps ; aucune action ne termine la pause',()=>{
+  const game=createGame();jump(game);run(game,.1);game.status='paused';const snapshot=structuredClone(game);
+  run(game,3,{up:true,left:true});assert.deepEqual(game,snapshot);
+  assert.equal(jump(game),false);assert.equal(resetToTarget(game),false);
+});
+test('Les limites retiennent le poney dans la carrière et autorisent un retour au parcours',()=>{
+  const game=createGame();game.x=BOUNDS.minX+.1;game.heading=Math.PI/2;
+  const events=run(game,1,{up:true});assert.ok(events.includes('edge'));
+  assert.ok(game.x>=BOUNDS.minX);assert.equal(resetToTarget(game),true);
+  assert.ok(game.x>BOUNDS.minX);
+});
+test('Les trois circuits se terminent avec les virages et sauts correctement placés',()=>{
+  for(const [id,config] of Object.entries(COURSES)){
+    const game=createGame('gentle',id);
+    for(let i=0;i<24000&&game.status==='playing';i++){
+      const gate=game.obstacles[game.next],dx=gate.x-game.x,dz=gate.z-game.z;
+      const angle=Math.atan2(-dx,-dz)-game.heading,delta=Math.atan2(Math.sin(angle),Math.cos(angle));
+      const local=localToGate(gate,game.x,game.z);
+      if(local.forward>0&&local.forward<3.4&&Math.abs(local.side)<3)jump(game);
+      advance(game,1/120,{left:delta>.02,right:delta<-.02});
+    }
+    assert.equal(game.status,'finished',id);assert.equal(game.cleared,config.count,id);assert.equal(game.stars,config.count*3,id);
+    assert.equal(game.distance,game.finish);assert.equal(game.effort,1);
+    const position={x:game.x,z:game.z};assert.deepEqual(advance(game,.1,{up:true}),[]);assert.equal(game.x,position.x);
+  }
+});
+test('Un départ invalide retrouve un circuit connu et les grands délais restent bornés',()=>{
+  const game=createGame('gentle','inconnu');assert.equal(game.course,'prairie');
+  advance(game,100,{up:true});assert.ok(game.time<=.10001);assert.ok(game.traveled<1);
+  const position={x:game.x,z:game.z};advance(game,-1);assert.equal(game.x,position.x);assert.equal(game.z,position.z);
 });
 
-test('Une barrière touchée ne termine pas la partie et ne compte qu’une fois',()=>{
-  const game=createGame();
-  game.distance=game.obstacles[0].x-HORSE_X-35;
-  assert.ok(advance(game,.1).includes('bump'));
-  for(let i=0;i<5;i++)advance(game,.1);
-  assert.equal(game.bumps,1);
-  assert.equal(game.status,'playing');
+test('Chaque thème contient exactement dix obstacles',()=>{
+  for(const id of Object.keys(COURSES)){
+    const game=createGame('gentle',id);assert.equal(game.obstacles.length,10);assert.equal(game.finish,10);
+  }
 });
-
-test('Un saut bien placé permet de passer une barrière',()=>{
+test('La troisième erreur perd immédiatement la partie et fige toutes les commandes',()=>{
   const game=createGame();
-  game.distance=game.obstacles[0].x-HORSE_X-110;
-  jump(game);
-  for(let i=0;i<100;i++)advance(game,1/120);
-  assert.equal(game.bumps,0);
-  assert.ok(game.distance>game.obstacles[0].x-HORSE_X+48);
+  for(let i=0;i<MAX_MISSES;i++){
+    approach(game);const events=run(game,1);
+    assert.equal(game.bumps,i+1);assert.equal(game.status,i===2?'lost':'playing');
+    assert.equal(events.includes('lose'),i===2);
+  }
+  assert.equal(game.next,3);assert.equal(game.cleared,0);
+  const snapshot=structuredClone(game);
+  assert.equal(jump(game),false);assert.equal(resetToTarget(game),false);
+  assert.deepEqual(advance(game,1,{up:true,right:true}),[]);assert.deepEqual(game,snapshot);
 });
-
-test('Une étoile se ramasse une seule fois à la bonne hauteur',()=>{
+test('La troisième erreur au dixième obstacle reste une défaite',()=>{
+  const game=createGame();game.next=9;game.distance=9;game.cleared=7;game.bumps=2;
+  approach(game);const events=run(game,1);
+  assert.equal(game.next,10);assert.equal(game.status,'lost');assert.ok(events.includes('lose'));assert.ok(!events.includes('finish'));
+});
+test('Terminer les dix obstacles avec deux erreurs donne une victoire',()=>{
   const game=createGame();
-  game.collectibles=[{x:HORSE_X,height:60,collected:false},{x:HORSE_X,height:200,collected:false}];
-  assert.deepEqual(advance(game,.01),['star']);
-  advance(game,.01);
-  assert.equal(game.stars,1);
-  assert.equal(game.collectibles[1].collected,false);
-});
-
-test('Pause, arrivée et nouvelle partie ont des états indépendants',()=>{
-  const game=createGame();game.status='paused';
-  assert.equal(jump(game),false);advance(game,.1);assert.equal(game.distance,0);
-  game.status='playing';game.distance=FINISH-1;
-  assert.ok(advance(game,.1).includes('finish'));
-  assert.equal(game.status,'finished');assert.equal(game.distance,FINISH);
-  assert.deepEqual(advance(game,.1),[]);
-  const next=createGame('trot');
-  assert.equal(next.stars,0);assert.equal(next.distance,0);assert.ok(next.speed>game.speed);
-});
-
-test('Une balade complète finit même sans sauter',()=>{
-  const game=createGame();
-  for(let i=0;i<4000&&game.status==='playing';i++)advance(game,1/60);
-  assert.equal(game.status,'finished');assert.equal(game.bumps,13);assert.ok(game.stars>0);
+  for(let i=0;i<10;i++){
+    approach(game);if(i>1)jump(game);
+    run(game,1.5);
+  }
+  assert.equal(game.status,'finished');assert.equal(game.bumps,2);assert.equal(game.cleared,8);assert.equal(game.stars,24);
 });

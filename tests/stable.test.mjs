@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStable, restoreStable, care, mood, rideReadiness, settleRide, NEEDS } from '../stable.mjs';
-import { createGame, COURSES, advance, jump, HORSE_X } from '../engine.mjs';
+import { createGame } from '../engine.mjs';
 
 test('Chaque poney a ses propres besoins et les soins améliorent son humeur', () => {
   const stable = createStable();
@@ -33,23 +33,6 @@ test('Les besoins indiquent le soin nécessaire avant de monter', () => {
   care(pony, 'rest'); assert.match(rideReadiness(pony), /foin/);
   care(pony, 'hay'); assert.match(rideReadiness(pony), /Brosse/);
   care(pony, 'brush'); assert.equal(rideReadiness(pony), '');
-});
-
-test('Les trois parcours peuvent se terminer et tous leurs obstacles sont comptés', () => {
-  const lengths = new Set();
-  for (const [id, course] of Object.entries(COURSES)) {
-    const game = createGame('trot', id);lengths.add(game.finish);
-    while (game.status === 'playing') {
-      // Jump when approaching the next fence: all three courses must be achievable.
-      const next = game.obstacles.find(obstacle => !obstacle.passed);
-      if (next && next.x - game.distance - HORSE_X < 120 && !next.touched) jump(game);
-      advance(game, 1 / 120);
-    }
-    assert.equal(game.obstacles.length, course.count);
-    assert.equal(game.cleared + game.bumps, course.count);
-    assert.equal(game.cleared, course.count);
-  }
-  assert.equal(lengths.size, 3);
 });
 
 test('Un parcours coûte de l’énergie et de la propreté une seule fois, et conserve le record', () => {
@@ -85,4 +68,15 @@ test('La sauvegarde restaure les poneys et records sans dégradation pendant l�
   assert.equal(restored.chosen, 'noisette');assert.equal(restored.ponies.noisette.food, 0);
   assert.equal(restored.ponies.noisette.energy, 100);assert.equal(restored.ponies.noisette.clean, 44);
   assert.deepEqual(restored.records, {});assert.equal(restored.rides, 0);
+});
+
+
+test('Une partie perdue consomme l’effort sans attribuer de victoire ni de record',()=>{
+  const stable=createStable(),game=createGame();game.status='lost';game.next=3;game.distance=3;game.bumps=3;
+  settleRide(stable,'noisette',game);
+  assert.ok(stable.ponies.noisette.energy<78);assert.equal(stable.rides,0);assert.equal(stable.stars,0);assert.deepEqual(stable.records,{});
+});
+test('Le nouveau défi conserve les besoins et totaux, avec des records distincts de l’ancien mode',()=>{
+  const stable=createStable();stable.ponies.nuage.food=92;stable.stars=27;stable.challengeVersion=2;stable.records.prairie={clear:8,stars:24};
+  const restored=restoreStable(JSON.stringify(stable));assert.equal(restored.ponies.nuage.food,92);assert.equal(restored.stars,27);assert.deepEqual(restored.records,{});assert.equal(restored.challengeVersion,3);
 });

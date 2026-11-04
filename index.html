@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#49795e">
-  <title>Les Crins Magiques · Mon écurie à moi</title>
+  <title>Les Crins Magiques · Le défi réaliste</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🐴%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -37,16 +37,19 @@
         <p class="save-note" id="save-note">✓ Ton écurie est sauvegardée ici.<br>Ton poney t’attend quand tu t’absentes.</p>
       </aside>
       <div class="main-column">
-        <section class="adventure card" aria-label="Mon poney et son écurie">
-          <div class="game-top"><span><i class="live-dot"></i> <span id="place-name">LE BOX DE NOISETTE</span></span><button id="pause" class="pause" hidden aria-label="Mettre en pause">Ⅱ <span>Pause</span></button><span class="box-tag" id="box-tag">Un petit cocon pour lui</span></div>
+        <section id="adventure" class="adventure card" aria-label="Mon poney et son écurie">
+          <div class="game-top"><span><i class="live-dot"></i> <span id="place-name">LE BOX DE NOISETTE</span></span><button id="pause" class="pause" hidden aria-label="Mettre en pause">Ⅱ <span>Pause</span></button><button id="fullscreen" class="pause fullscreen" aria-label="Passer en plein écran">⛶</button><span class="box-tag" id="box-tag">Un petit cocon pour lui</span></div>
           <div class="scene" id="scene">
-            <canvas id="game" width="1000" height="520" role="img" aria-label="Ton poney dans son écurie. Les boutons de soins se trouvent sous le dessin."></canvas>
-            <div class="hud" id="ride-hud" hidden><span class="star-count">★ <b id="stars">0</b><small>étoiles</small></span><span class="companion"><b id="cleared">0</b> obstacles réussis</span></div>
+            <canvas id="game" width="1200" height="700" role="img" aria-label="Ton poney dans son écurie. Les boutons de soins se trouvent sous le dessin."></canvas>
+            <div class="hud" id="ride-hud" hidden><span class="star-count">★ <b id="stars">0</b><small>étoiles</small></span><span class="companion"><b id="cleared">0</b> obstacles réussis <span id="faults">Ratés : <b id="fault-count">0 / 3</b></span></span></div>
+            <div id="asset-loading" class="asset-loading"><strong>Bienvenue au domaine</strong><span>Préparation de ton cheval et de la prairie…</span></div>
+            <div id="webgl-error" class="webgl-error" hidden><h2>La 3D ne peut pas démarrer ici.</h2><p>Ouvre ce jeu dans une version récente de Chrome, Edge, Firefox ou Safari avec WebGL activé.</p></div>
+            <div id="navigation" class="navigation" hidden><div class="target-card"><span class="eyebrow">TON PROCHAIN SAUT</span><strong id="next-target"></strong><span id="direction-hint"></span></div><canvas id="minimap" width="220" height="160" role="img" aria-label="Carte du parcours : le triangle vert représente ton poney et le point doré le prochain obstacle."></canvas></div>
             <span class="stable-bubble" id="stable-bubble">Bienvenue dans mon petit chez-moi ! ♡</span>
             <div class="overlay" id="overlay" hidden>
-              <div class="welcome" id="welcome" hidden><span class="welcome-icon" id="course-icon">🌼</span><span class="eyebrow">EN SELLE, CAVALIÈRE !</span><h2 id="course-title">La prairie fleurie</h2><p id="course-description"></p><p class="course-help">Ton poney avance tout seul.<br>Espace, ↑ ou Sauter pour les obstacles.</p><button id="start" class="primary">C’est parti ! →</button><small id="duration"></small></div>
+              <div class="welcome" id="welcome" hidden><span class="welcome-icon" id="course-icon">🌼</span><span class="eyebrow">EN SELLE, CAVALIÈRE !</span><h2 id="course-title">La prairie fleurie</h2><p id="course-description"></p><p class="course-help">← → pour tourner · ↑ accélérer · ↓ freiner<br><strong>Espace pour sauter.</strong> Suis les numéros !</p><button id="start" class="primary">C’est parti ! →</button><small id="duration"></small></div>
               <div class="welcome" id="paused" hidden><span class="welcome-icon">🌿</span><h2>Petite pause</h2><p>Ton poney t’attend sagement.</p><button id="resume" class="primary">On continue ! →</button><button class="text-button" data-home>Rentrer à l’écurie</button></div>
-              <div class="welcome" id="result" hidden><span class="welcome-icon">🏵️</span><span class="eyebrow">BRAVO, CAVALIÈRE !</span><h2>Une belle équipe !</h2><p id="result-text"></p><div id="result-stars" class="result-stars" aria-hidden="true">★ ★ ★</div><button class="primary" data-home>Prendre soin de mon poney ♡</button><button id="again" class="text-button">Un autre parcours</button></div>
+              <div class="welcome" id="result" hidden><span class="welcome-icon" id="result-icon">🏆</span><span class="eyebrow" id="result-eyebrow">BRAVO, CAVALIÈRE !</span><h2 id="result-title">Parcours réussi !</h2><p id="result-text"></p><div id="result-stars" class="result-stars" aria-hidden="true">★ ★ ★</div><button class="primary" data-home>Prendre soin de mon poney ♡</button><button id="again" class="text-button">Un autre parcours</button></div>
             </div>
             <div class="toast" id="toast" role="status" aria-live="polite"></div>
           </div>
@@ -68,13 +71,17 @@
         <section class="course-panel card" id="course-panel" hidden aria-label="Choisir un parcours">
           <div class="care-heading"><div><span class="eyebrow">VOTRE PROCHAINE AVENTURE</span><h2>Choisis ton parcours</h2></div><button class="text-button" data-home>⌂ Rentrer au box</button></div>
           <div class="course-options" role="group" aria-label="Parcours de saut">
-            <button data-course="prairie" aria-pressed="true" class="active"><span>🌼</span><strong>Prairie fleurie</strong><small>8 petites barrières</small><em id="record-prairie">À découvrir</em></button>
+            <button data-course="prairie" aria-pressed="true" class="active"><span>🌼</span><strong>Prairie fleurie</strong><small>10 petites barrières</small><em id="record-prairie">À découvrir</em></button>
             <button data-course="garden" aria-pressed="false"><span>🎀</span><strong>Jardin des rubans</strong><small>10 barrières colorées</small><em id="record-garden">À découvrir</em></button>
-            <button data-course="forest" aria-pressed="false"><span>🌲</span><strong>Forêt enchantée</strong><small>13 obstacles à franchir</small><em id="record-forest">À découvrir</em></button>
+            <button data-course="forest" aria-pressed="false"><span>🌲</span><strong>Forêt enchantée</strong><small>10 obstacles plus hauts</small><em id="record-forest">À découvrir</em></button>
           </div>
           <div class="course-pace"><span>Votre allure</span><div class="paces" role="group" aria-label="Vitesse du parcours"><button data-pace="gentle" class="active" aria-pressed="true">🌼 Tranquille</button><button data-pace="trot" aria-pressed="false">🍃 Au trot</button></div></div>
         </section>
-        <div class="controls card" id="controls" hidden><div class="how"><span class="key">␣</span><p><strong>Un petit saut, et hop !</strong><span><kbd>Espace</kbd>, <kbd>↑</kbd> ou le bouton.</span></p></div><button id="jump" class="jump" disabled>↟ <span>Sauter</span></button></div>
+        <div class="controls card" id="controls" hidden>
+          <div class="steering" role="group" aria-label="Diriger le poney"><button data-input="left" aria-label="Tourner à gauche">←</button><div><button data-input="up" aria-label="Accélérer">↑</button><button data-input="down" aria-label="Freiner">↓</button></div><button data-input="right" aria-label="Tourner à droite">→</button></div>
+          <div class="how"><p><strong>À toi de tenir les rênes !</strong><span>Flèches pour diriger · <kbd>Espace</kbd> pour sauter</span></p></div>
+          <button id="reposition" class="reposition">↺ Me replacer</button><button id="jump" class="jump" disabled>↟ <span>Sauter</span></button>
+        </div>
       </div>
     </div>
     <p class="footnote">On prend soin de lui, on grandit ensemble. <span>♡</span></p>

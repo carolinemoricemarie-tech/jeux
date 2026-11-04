@@ -1,0 +1,60 @@
+{
+  "encoder": "sharp 0.35.5",
+  "mode": "WebP sans perte",
+  "images": [
+    {
+      "file": "horse-stride",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "png_bytes": 2283732,
+      "webp_bytes": 1570086
+    },
+    {
+      "file": "horse-stable",
+      "dimensions": [
+        1086,
+        1448
+      ],
+      "png_bytes": 1344685,
+      "webp_bytes": 874812
+    },
+    {
+      "file": "real-trees",
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "png_bytes": 2744221,
+      "webp_bytes": 1998150
+    },
+    {
+      "file": "meadow-grass",
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "png_bytes": 4498055,
+      "webp_bytes": 2943554
+    },
+    {
+      "file": "countryside",
+      "dimensions": [
+        2172,
+        724
+      ],
+      "png_bytes": 1914241,
+      "webp_bytes": 1409388
+    },
+    {
+      "file": "stable-wood",
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "png_bytes": 3230401,
+      "webp_bytes": 2089828
+    }
+  ]
+}

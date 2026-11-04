@@ -10,7 +10,7 @@ export const ACTIONS = {
 };
 const clamp = n => Math.min(100, Math.max(0, n));
 export function createStable() {
-  return { version: 1, chosen: 'noisette', ponies: Object.fromEntries(PONY_IDS.map(id =>
+  return { version: 1, challengeVersion: 3, chosen: 'noisette', ponies: Object.fromEntries(PONY_IDS.map(id =>
     [id, { food: 58, clean: 44, energy: 78, bond: 48 }])), rides: 0, stars: 0, records: {} };
 }
 export function restoreStable(raw) {
@@ -27,8 +27,8 @@ export function restoreStable(raw) {
       if (Number.isSafeInteger(parsed[key]) && parsed[key] >= 0) fresh[key] = parsed[key];
     }
     for (const course of ['prairie', 'garden', 'forest']) {
-      const record = parsed.records?.[course];
-      const count = { prairie: 8, garden: 10, forest: 13 }[course];
+      const record = parsed.challengeVersion === 3 ? parsed.records?.[course] : null;
+      const count = 10;
       if (record && Number.isInteger(record.clear) && record.clear >= 0 && record.clear <= count &&
           Number.isInteger(record.stars) && record.stars >= 0 && record.stars <= count * 3) {
         fresh.records[course] = { clear: record.clear, stars: record.stars };
@@ -61,7 +61,7 @@ export function settleRide(stable, id, game) {
   // Each ride is charged once, including an early return. No needs decay offline.
   if (!game || game.settled) return false;
   game.settled = true;
-  const fraction = Math.min(1, game.distance / game.finish);
+  const fraction = Math.min(1, Math.max(game.distance / game.finish, game.effort || 0));
   const pony = stable.ponies[id];
   pony.energy = clamp(pony.energy - 25 * fraction);
   pony.food = clamp(pony.food - 20 * fraction);
