@@ -1,0 +1,88 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createStable, restoreStable, care, mood, rideReadiness, settleRide, NEEDS } from '../stable.mjs';
+import { createGame, COURSES, advance, jump, HORSE_X } from '../engine.mjs';
+
+test('Chaque poney a ses propres besoins et les soins améliorent son humeur', () => {
+  const stable = createStable();
+  const pony = stable.ponies.noisette;
+  const before = structuredClone(stable.ponies.nuage);
+  assert.equal(mood(pony).label, 'Tout tranquille');
+  for (const action of ['hay', 'carrot', 'brush', 'brush', 'rest', 'pet']) care(pony, action);
+  assert.equal(mood(pony).label, 'Au comble du bonheur');
+  assert.deepEqual(stable.ponies.nuage, before);
+});
+
+test('Chaque soin agit sur les besoins attendus et les jauges restent bornées', () => {
+  const pony = { food: 0, clean: 0, energy: 0, bond: 0 };
+  care(pony, 'hay'); assert.equal(pony.food, 28);
+  care(pony, 'brush'); assert.equal(pony.clean, 24);
+  care(pony, 'rest'); assert.equal(pony.energy, 35);
+  care(pony, 'carrot'); assert.equal(pony.food, 37);
+  care(pony, 'pet'); assert.equal(pony.bond, 37);
+  const snapshot = structuredClone(pony);
+  assert.equal(care(pony, '__proto__'), false);
+  assert.deepEqual(pony, snapshot);
+  for (let i = 0; i < 100; i++) for (const action of ['rest', 'hay', 'brush', 'pet']) care(pony, action);
+  for (const need of NEEDS) assert.ok(pony[need] >= 0 && pony[need] <= 100);
+});
+
+test('Les besoins indiquent le soin nécessaire avant de monter', () => {
+  const pony = { food: 10, clean: 10, energy: 10, bond: 50 };
+  assert.match(mood(pony).label, /fatigué/); assert.match(rideReadiness(pony), /repos/);
+  care(pony, 'rest'); assert.match(rideReadiness(pony), /foin/);
+  care(pony, 'hay'); assert.match(rideReadiness(pony), /Brosse/);
+  care(pony, 'brush'); assert.equal(rideReadiness(pony), '');
+});
+
+test('Les trois parcours peuvent se terminer et tous leurs obstacles sont comptés', () => {
+  const lengths = new Set();
+  for (const [id, course] of Object.entries(COURSES)) {
+    const game = createGame('trot', id);lengths.add(game.finish);
+    while (game.status === 'playing') {
+      // Jump when approaching the next fence: all three courses must be achievable.
+      const next = game.obstacles.find(obstacle => !obstacle.passed);
+      if (next && next.x - game.distance - HORSE_X < 120 && !next.touched) jump(game);
+      advance(game, 1 / 120);
+    }
+    assert.equal(game.obstacles.length, course.count);
+    assert.equal(game.cleared + game.bumps, course.count);
+    assert.equal(game.cleared, course.count);
+  }
+  assert.equal(lengths.size, 3);
+});
+
+test('Un parcours coûte de l’énergie et de la propreté une seule fois, et conserve le record', () => {
+  const stable = createStable(), pony = stable.ponies.noisette;
+  const game = createGame('gentle', 'prairie');
+  game.distance = game.finish;game.status = 'finished';game.cleared = 7;game.stars = 18;
+  assert.equal(settleRide(stable, 'noisette', game), true);
+  assert.equal(pony.energy, 53);assert.equal(pony.clean, 16);assert.equal(pony.food, 38);
+  assert.equal(stable.rides, 1);assert.equal(stable.stars, 18);
+  assert.equal(settleRide(stable, 'noisette', game), false);
+  assert.equal(stable.rides, 1);assert.equal(pony.energy, 53);
+  const other = createGame('gentle', 'prairie');other.status = 'finished';other.distance = other.finish;other.cleared = 2;
+  settleRide(stable, 'noisette', other);
+  assert.deepEqual(stable.records.prairie, { clear: 7, stars: 18 });
+});
+
+test('Un retour anticipé compte seulement l’effort accompli, sans ruban ni record', () => {
+  const stable = createStable(), game = createGame('gentle', 'garden');
+  game.distance = game.finish / 2;
+  settleRide(stable, 'caramel', game);
+  assert.equal(stable.ponies.caramel.energy, 65.5);
+  assert.equal(stable.ponies.noisette.energy, 78);
+  assert.equal(stable.rides, 0);assert.deepEqual(stable.records, {});
+});
+
+test('La sauvegarde restaure les poneys et records sans dégradation pendant l’absence', () => {
+  const stable = createStable();stable.chosen = 'nuage';care(stable.ponies.nuage, 'brush');
+  stable.records.garden = { clear: 8, stars: 19 };
+  assert.deepEqual(restoreStable(JSON.stringify(stable)), stable);
+  assert.deepEqual(restoreStable('du texte abîmé'), createStable());
+  const corrupted = JSON.stringify({ version: 1, chosen: 'inconnu', ponies: { noisette: { food: -80, energy: 500, clean: 'a' } }, rides: -5, records: { garden: { clear: -3, stars: 1 } } });
+  const restored = restoreStable(corrupted);
+  assert.equal(restored.chosen, 'noisette');assert.equal(restored.ponies.noisette.food, 0);
+  assert.equal(restored.ponies.noisette.energy, 100);assert.equal(restored.ponies.noisette.clean, 44);
+  assert.deepEqual(restored.records, {});assert.equal(restored.rides, 0);
+});
