@@ -21,7 +21,11 @@ Espace : sauter. R : se replacer. Échap : pause.
 Sur écran tactile : maintenir les flèches et toucher Sauter.
 
 Dix obstacles, dans l'ordre. Trois obstacles manqués : partie perdue.
-Les soins et l'écurie sont accessibles avant et après le parcours.
+Dans l'écurie, cliquer directement sur la botte de foin, les carottes,
+les brosses ou le cheval pour les soins. La cavalière est visible
+pendant les gestes. Cliquer sur le tapis, puis la selle, puis le filet,
+et enfin sur Monter. Un nouveau soin retire le matériel avant le geste.
+Les noms des objets peuvent être masqués avec le bouton dans la scène.
 
 Ne pas ouvrir le fichier dans un aperçu de messagerie : utiliser un
 navigateur avec WebGL 2. Les données sont sauvegardées dans ce navigateur.

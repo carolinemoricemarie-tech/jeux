@@ -1,6 +1,6 @@
 import { loadPhotos, photoTexture, cutout, photoPony } from './photo-assets.mjs';
 import * as THREE from './vendor/three.module.min.mjs';
-import { BOUNDS, createGame } from './engine.mjs';
+import { BOUNDS, createGame, jumpFrame } from './engine.mjs';
 
 const sphereGeometry=new THREE.SphereGeometry(1,24,16);
 const boxGeometry=new THREE.BoxGeometry(1,1,1);
@@ -218,8 +218,11 @@ export class PonyWorld {
     const coat=p.name==='Nuage'?1:p.name==='Caramel'?2:0;
     pony.mounted.material.userData.coat.value=coat;pony.standing.material.userData.coat.value=coat;
     if(game?.status==='playing'){
-      const frame=game.height>.3?3:game.speed>.3?Math.floor(time*(6+game.speed*.6))%8:0;
-      pony.stride.offset.x=frame/8;
+      const jumping=game.jumpActive;
+      const texture=jumping?pony.jumping:pony.stride;
+      if(pony.mounted.material.map!==texture){pony.mounted.material.map=texture;pony.mounted.material.needsUpdate=true;}
+      const frame=jumping?jumpFrame(game):game.speed>.3?Math.floor(time*(6+game.speed*.6))%8:0;
+      texture.offset.x=frame/8;this.canvas.dataset.jumpPhase=jumping?String(frame):'ground';
     }
     pony.body.position.y=game?.height||0;
     if(stable){
@@ -231,6 +234,7 @@ export class PonyWorld {
     }
   }
   render(view,game,p,needs,effect,time,dt,course){
+    if(view==='stable'){this.sceneName='stable';this.lastCourseView=false;return;}
     const now=performance.now();if(now-this.lastRenderAt<1000/(this.software?15:30))return;this.lastRenderAt=now;
     const switching=this.sceneName!==view;
     if(switching){this.sceneName=view;(view==='stable'?this.barn:this.arena).add(this.pony.root,this.shadow);this.resize();}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStable, restoreStable, care, mood, rideReadiness, settleRide, NEEDS } from '../stable.mjs';
+import { createStable, restoreStable, care, mood, rideReadiness, settleRide, NEEDS, fitTack, tackReadiness, removeTack } from '../stable.mjs';
 import { createGame } from '../engine.mjs';
 
 test('Chaque poney a ses propres besoins et les soins améliorent son humeur', () => {
@@ -79,4 +79,36 @@ test('Une partie perdue consomme l’effort sans attribuer de victoire ni de rec
 test('Le nouveau défi conserve les besoins et totaux, avec des records distincts de l’ancien mode',()=>{
   const stable=createStable();stable.ponies.nuage.food=92;stable.stars=27;stable.challengeVersion=2;stable.records.prairie={clear:8,stars:24};
   const restored=restoreStable(JSON.stringify(stable));assert.equal(restored.ponies.nuage.food,92);assert.equal(restored.stars,27);assert.deepEqual(restored.records,{});assert.equal(restored.challengeVersion,3);
+});
+
+test('Le tapis, la selle et le filet se posent dans cet ordre',()=>{
+  const pony=createStable().ponies.noisette;
+  assert.match(tackReadiness(pony),/tapis/);
+  assert.equal(fitTack(pony,'saddle').ok,false);assert.equal(pony.tack.saddle,false);
+  assert.equal(fitTack(pony,'bridle').ok,false);
+  assert.equal(fitTack(pony,'pad').ok,true);assert.match(tackReadiness(pony),/selle/);
+  assert.equal(fitTack(pony,'bridle').ok,false);
+  assert.equal(fitTack(pony,'saddle').ok,true);assert.match(tackReadiness(pony),/filet/);
+  assert.equal(fitTack(pony,'bridle').ok,true);assert.equal(tackReadiness(pony),'');
+  assert.equal(fitTack(pony,'bridle').ok,false);
+  assert.equal(fitTack(pony,'__proto__').ok,false);
+});
+test('L’équipement est propre à chaque poney et sauvegardé avec lui',()=>{
+  const stable=createStable();for(const item of ['pad','saddle','bridle'])fitTack(stable.ponies.noisette,item);
+  assert.equal(stable.ponies.nuage.tack.pad,false);assert.equal(stable.ponies.caramel.tack.pad,false);
+  const restored=restoreStable(JSON.stringify(stable));assert.deepEqual(restored,stable);
+  assert.equal(tackReadiness(restored.ponies.noisette),'');
+});
+test('Retirer le matériel pour un soin conserve les besoins et permet de rééquiper',()=>{
+  const pony=createStable().ponies.noisette;for(const item of ['pad','saddle','bridle'])fitTack(pony,item);
+  const food=pony.food;assert.equal(removeTack(pony),true);assert.equal(pony.food,food);
+  assert.deepEqual(pony.tack,{pad:false,saddle:false,bridle:false});assert.match(tackReadiness(pony),/tapis/);
+  assert.equal(removeTack(pony),false);assert.equal(fitTack(pony,'pad').ok,true);
+});
+test('Les anciennes sauvegardes et équipements incohérents restent utilisables',()=>{
+  const legacy=createStable();delete legacy.ponies.noisette.tack;legacy.ponies.noisette.food=89;
+  legacy.ponies.nuage.tack={pad:false,saddle:true,bridle:true};
+  const restored=restoreStable(JSON.stringify(legacy));assert.equal(restored.ponies.noisette.food,89);
+  assert.deepEqual(restored.ponies.noisette.tack,{pad:false,saddle:false,bridle:false});
+  assert.deepEqual(restored.ponies.nuage.tack,{pad:false,saddle:false,bridle:false});
 });

@@ -1,6 +1,8 @@
 export const SAVE_KEY = 'crins-magiques-ecurie-v1';
 export const PONY_IDS = ['noisette', 'nuage', 'caramel'];
 export const NEEDS = ['food', 'clean', 'energy', 'bond'];
+export const TACK_ORDER = ['pad', 'saddle', 'bridle'];
+export const TACK_NAMES = { pad: 'le tapis', saddle: 'la selle', bridle: 'le filet' };
 export const ACTIONS = {
   hay: { food: 28, energy: 3, bond: 3 },
   carrot: { food: 12, bond: 9 },
@@ -11,7 +13,7 @@ export const ACTIONS = {
 const clamp = n => Math.min(100, Math.max(0, n));
 export function createStable() {
   return { version: 1, challengeVersion: 3, chosen: 'noisette', ponies: Object.fromEntries(PONY_IDS.map(id =>
-    [id, { food: 58, clean: 44, energy: 78, bond: 48 }])), rides: 0, stars: 0, records: {} };
+    [id, { food: 58, clean: 44, energy: 78, bond: 48, tack: { pad: false, saddle: false, bridle: false } }])), rides: 0, stars: 0, records: {} };
 }
 export function restoreStable(raw) {
   const fresh = createStable();
@@ -22,6 +24,13 @@ export function restoreStable(raw) {
     for (const id of PONY_IDS) for (const need of NEEDS) {
       const n = parsed.ponies?.[id]?.[need];
       if (typeof n === 'number' && Number.isFinite(n)) fresh.ponies[id][need] = clamp(n);
+    }
+    for (const id of PONY_IDS) {
+      const saved = parsed.ponies?.[id]?.tack;
+      const tack = fresh.ponies[id].tack;
+      tack.pad = saved?.pad === true;
+      tack.saddle = tack.pad && saved?.saddle === true;
+      tack.bridle = tack.saddle && saved?.bridle === true;
     }
     for (const key of ['rides', 'stars']) {
       if (Number.isSafeInteger(parsed[key]) && parsed[key] >= 0) fresh[key] = parsed[key];
@@ -56,6 +65,25 @@ export function rideReadiness(pony) {
   if (pony.food < 25) return 'Un peu de foin avant le parcours lui fera du bien.';
   if (pony.clean < 20) return 'Brosse ton poney avant de lui mettre sa selle.';
   return '';
+}
+export function tackReadiness(pony) {
+  const missing = TACK_ORDER.find(key => !pony.tack?.[key]);
+  return missing ? `Installe d’abord ${TACK_NAMES[missing]} en cliquant dessus dans l’écurie.` : '';
+}
+export function fitTack(pony, item) {
+  if (!TACK_ORDER.includes(item)) return { ok: false, message: 'Cet équipement est inconnu.' };
+  pony.tack ||= { pad: false, saddle: false, bridle: false };
+  const index = TACK_ORDER.indexOf(item);
+  if (pony.tack[item]) return { ok: false, message: `${TACK_NAMES[item][0].toUpperCase()+TACK_NAMES[item].slice(1)} est déjà en place.` };
+  const prerequisite = TACK_ORDER.slice(0, index).find(key => !pony.tack[key]);
+  if (prerequisite) return { ok: false, message: `Commence par ${TACK_NAMES[prerequisite]}.` };
+  pony.tack[item] = true;
+  return { ok: true, message: `${TACK_NAMES[item][0].toUpperCase()+TACK_NAMES[item].slice(1)} est installé${item === 'saddle' ? 'e' : ''} !` };
+}
+export function removeTack(pony) {
+  const wasEquipped = TACK_ORDER.some(key => pony.tack?.[key]);
+  pony.tack = { pad: false, saddle: false, bridle: false };
+  return wasEquipped;
 }
 export function settleRide(stable, id, game) {
   // Each ride is charged once, including an early return. No needs decay offline.

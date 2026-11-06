@@ -55,6 +55,87 @@
       ],
       "png_bytes": 3230401,
       "webp_bytes": 2089828
+    },
+    {
+      "file": "stable-room",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "png_bytes": 3419446,
+      "webp_bytes": 2219120
+    },
+    {
+      "file": "stable-care-brush",
+      "dimensions": [
+        1217,
+        1293
+      ],
+      "png_bytes": 1687731,
+      "webp_bytes": 1067222
+    },
+    {
+      "file": "stable-care-hay",
+      "dimensions": [
+        1199,
+        1312
+      ],
+      "png_bytes": 1498622,
+      "webp_bytes": 919328
+    },
+    {
+      "file": "stable-care-carrot",
+      "dimensions": [
+        1199,
+        1312
+      ],
+      "png_bytes": 1400872,
+      "webp_bytes": 892264
+    },
+    {
+      "file": "stable-care-pet",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "png_bytes": 1721560,
+      "webp_bytes": 592878
+    },
+    {
+      "file": "stable-equip-pad",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "png_bytes": 1834620,
+      "webp_bytes": 643988
+    },
+    {
+      "file": "stable-equip-saddle",
+      "dimensions": [
+        1199,
+        1312
+      ],
+      "png_bytes": 1955267,
+      "webp_bytes": 1104060
+    },
+    {
+      "file": "stable-equip-bridle",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "png_bytes": 2071077,
+      "webp_bytes": 1323000
+    },
+    {
+      "file": "horse-jump",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "png_bytes": 2143835,
+      "webp_bytes": 895788
     }
   ]
 }

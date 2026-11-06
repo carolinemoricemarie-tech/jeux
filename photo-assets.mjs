@@ -36,6 +36,18 @@ export function strideTexture(image){
   });
   const tex=photoTexture(canvas);tex.repeat.set(1/8,1);return tex;
 }
+export function jumpTexture(image){
+  const w=image.width/4,h=image.height/2;
+  // Register the saddle point, not the changing hoof height, throughout the jump.
+  const anchors=[[204,214],[219,224],[219,221],[216,209],[204,212],[215,235],[215,231],[219,224]];
+  const canvas=document.createElement('canvas');canvas.width=4096;canvas.height=640;
+  const c=canvas.getContext('2d'),scale=1.25;
+  anchors.forEach(([x,y],i)=>{
+    c.save();c.beginPath();c.rect(i*512,0,512,640);c.clip();
+    c.drawImage(image,i%4*w,Math.floor(i/4)*h,w,h,i*512+256-x*scale,300-y*scale,w*scale,h*scale);c.restore();
+  });
+  const tex=photoTexture(canvas);tex.repeat.set(1/8,1);return tex;
+}
 export function horseMaterial(map){
   const m=new THREE.SpriteMaterial({map,transparent:true,alphaTest:.12,depthWrite:true,toneMapped:false,fog:true});
   m.userData.coat={value:0};
@@ -54,8 +66,8 @@ export function horseMaterial(map){
 }
 export function photoPony(photos){
   const root=new THREE.Group(),body=new THREE.Group();root.add(body);
-  const stride=strideTexture(photos.horse),standing=cutout(photos.stable);
+  const stride=strideTexture(photos.horse),jumping=jumpTexture(photos.jump),standing=cutout(photos.stable);
   const mounted=new THREE.Sprite(horseMaterial(stride));mounted.center.set(.5,0);mounted.scale.set(3.12,3.9,1);mounted.position.y=-.122;body.add(mounted);
   const stable=new THREE.Sprite(horseMaterial(standing));stable.center.set(.5,0);stable.scale.set(2.8*standing.image.width/standing.image.height,2.8,1);body.add(stable);
-  return {root,body,mounted,standing:stable,stride};
+  return {root,body,mounted,standing:stable,stride,jumping};
 }

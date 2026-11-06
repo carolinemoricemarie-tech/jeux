@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGame, jump, advance, resetToTarget, localToGate, BOUNDS, COURSES, MAX_MISSES } from '../engine.mjs';
+import { createGame, jump, advance, resetToTarget, localToGate, BOUNDS, COURSES, MAX_MISSES, jumpFrame, JUMP_DURATION, timeToTarget, JUMP_PREPARATION, JUMP_FLIGHT, JUMP_RECOVERY, jumpClearance } from '../engine.mjs';
 
 function approach(game,index=game.next,distance=3,side=0){
   const gate=game.obstacles[index];
@@ -23,8 +23,8 @@ test('Accélérer, relâcher et freiner changent l’allure sans mouvement bloqu
   const point={x:game.x,z:game.z};run(game,1,{down:true});assert.equal(game.x,point.x);assert.equal(game.z,point.z);
 });
 test('Un saut a une vraie hauteur, interdit le double saut et revient au sol',()=>{
-  const game=createGame();assert.equal(jump(game),true);run(game,.2);
-  assert.ok(game.height>1);assert.equal(jump(game),false);run(game,1.5);
+  const game=createGame();assert.equal(jump(game),true);run(game,.35);
+  assert.ok(game.height>.5);assert.equal(jump(game),false);run(game,1.7);
   assert.equal(game.height,0);assert.equal(game.velocity,0);assert.equal(jump(game),true);
 });
 test('Passer au sol compte une barrière touchée une fois, sans défaite',()=>{
@@ -39,7 +39,7 @@ test('Un saut au-dessus du bon obstacle rapporte un saut réussi et trois étoil
   assert.equal(game.cleared,1);assert.equal(game.stars,3);assert.equal(game.next,1);
 });
 test('Contourner le bon obstacle compte une erreur et Me replacer vise le suivant',()=>{
-  const game=createGame();approach(game,0,3,6);jump(game);run(game,1.5);
+  const game=createGame();approach(game,0,3,6);jump(game);run(game,1.7);
   assert.equal(game.next,1);assert.equal(game.cleared,0);assert.equal(game.bumps,1);
   assert.equal(resetToTarget(game),true);assert.equal(game.speed,0);
   assert.ok(Math.abs(localToGate(game.obstacles[1],game.x,game.z).side)<.001);
@@ -47,8 +47,8 @@ test('Contourner le bon obstacle compte une erreur et Me replacer vise le suivan
   approach(game);jump(game);run(game,1);assert.equal(game.next,2);
 });
 test('Les obstacles doivent être passés dans l’ordre et dans le bon sens',()=>{
-  const game=createGame();approach(game,1);jump(game);run(game,1.5);assert.equal(game.next,0);
-  approach(game,0,-3);game.heading+=Math.PI;jump(game);run(game,1.5);assert.equal(game.next,0);
+  const game=createGame();approach(game,1);jump(game);run(game,1.7);assert.equal(game.next,0);
+  approach(game,0,-3);game.heading+=Math.PI;jump(game);run(game,1.7);assert.equal(game.next,0);
 });
 test('La pause fige la position, le saut et le temps ; aucune action ne termine la pause',()=>{
   const game=createGame();jump(game);run(game,.1);game.status='paused';const snapshot=structuredClone(game);
@@ -68,7 +68,7 @@ test('Les trois circuits se terminent avec les virages et sauts correctement pla
       const gate=game.obstacles[game.next],dx=gate.x-game.x,dz=gate.z-game.z;
       const angle=Math.atan2(-dx,-dz)-game.heading,delta=Math.atan2(Math.sin(angle),Math.cos(angle));
       const local=localToGate(gate,game.x,game.z);
-      if(local.forward>0&&local.forward<3.4&&Math.abs(local.side)<3)jump(game);
+      if(timeToTarget(game)<JUMP_PREPARATION+JUMP_FLIGHT*.5&&Math.abs(local.side)<3)jump(game);
       advance(game,1/120,{left:delta>.02,right:delta<-.02});
     }
     assert.equal(game.status,'finished',id);assert.equal(game.cleared,config.count,id);assert.equal(game.stars,config.count*3,id);
@@ -108,7 +108,45 @@ test('Terminer les dix obstacles avec deux erreurs donne une victoire',()=>{
   const game=createGame();
   for(let i=0;i<10;i++){
     approach(game);if(i>1)jump(game);
-    run(game,1.5);
+    run(game,1.7);
   }
   assert.equal(game.status,'finished');assert.equal(game.bumps,2);assert.equal(game.cleared,8);assert.equal(game.stars,24);
+});
+
+test('Le saut commence par une impulsion au sol sans double saut pendant la préparation',()=>{
+  const game=createGame();jump(game);advance(game,.06);
+  assert.equal(game.height,0);assert.equal(jumpFrame(game),0);assert.equal(jump(game),false);
+  run(game,.25);assert.ok(game.height>0);assert.ok(jumpFrame(game)>=2);
+});
+test('Les huit poses du saut passent dans l’ordre et la réception revient au galop',()=>{
+  const game=createGame();jump(game);const seen=new Set([jumpFrame(game)]);
+  let lastFrame=0,maxHeight=0;
+  for(let i=0;i<Math.ceil(JUMP_DURATION*120)+5;i++){
+    advance(game,1/120,{down:true});maxHeight=Math.max(maxHeight,game.height);
+    const phase=jumpFrame(game);
+    if(phase>=0){assert.ok(phase>=lastFrame);lastFrame=phase;seen.add(phase);}
+  }
+  assert.deepEqual([...seen],[0,1,2,3,4,5,6,7]);assert.ok(maxHeight>.85&&maxHeight<1.15);
+  assert.equal(game.height,0);assert.equal(game.jumpActive,false);assert.equal(jumpFrame(game),-1);
+  assert.equal(jump(game),true);
+});
+test('La pause conserve la pose du saut et Me replacer annule le saut',()=>{
+  const game=createGame();jump(game);run(game,.55);const pose=jumpFrame(game),time=game.jumpTime;
+  game.status='paused';run(game,2);assert.equal(jumpFrame(game),pose);assert.equal(game.jumpTime,time);
+  game.status='playing';resetToTarget(game);assert.equal(jumpFrame(game),-1);assert.equal(game.height,0);
+});
+test('Le conseil de saut tient compte de la vitesse et du sens d’approche',()=>{
+  const game=createGame();approach(game,0,6);
+  const slower=timeToTarget(game);game.speed=9;assert.ok(timeToTarget(game)<slower);
+  game.heading+=Math.PI;assert.equal(timeToTarget(game),Infinity);
+  game.heading-=Math.PI;game.speed=0;assert.equal(timeToTarget(game),Infinity);
+  game.next=game.finish;assert.equal(timeToTarget(game),Infinity);
+});
+test('Les antérieurs repliés passent la barre sans faire flotter tout le corps plus haut',()=>{
+  const folded=createGame('gentle','forest');folded.obstacles[0].height=1.3;approach(folded,0,.01);
+  folded.height=.85;folded.jumpActive=true;folded.jumpTime=JUMP_PREPARATION+JUMP_FLIGHT*.4;
+  assert.ok(jumpClearance(folded)>1.3);advance(folded,.01);assert.equal(folded.cleared,1);
+  const extended=createGame('gentle','forest');extended.obstacles[0].height=1.3;approach(extended,0,.01);
+  extended.height=.85;extended.jumpActive=true;extended.jumpTime=JUMP_PREPARATION+JUMP_FLIGHT+JUMP_RECOVERY*.1;
+  assert.ok(jumpClearance(extended)<1.3);advance(extended,.01);assert.equal(extended.bumps,1);
 });

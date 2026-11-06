@@ -40,7 +40,26 @@
         <section id="adventure" class="adventure card" aria-label="Mon poney et son écurie">
           <div class="game-top"><span><i class="live-dot"></i> <span id="place-name">LE BOX DE NOISETTE</span></span><button id="pause" class="pause" hidden aria-label="Mettre en pause">Ⅱ <span>Pause</span></button><button id="fullscreen" class="pause fullscreen" aria-label="Passer en plein écran">⛶</button><span class="box-tag" id="box-tag">Un petit cocon pour lui</span></div>
           <div class="scene" id="scene">
-            <canvas id="game" width="1200" height="700" role="img" aria-label="Ton poney dans son écurie. Les boutons de soins se trouvent sous le dessin."></canvas>
+            <canvas id="game" width="1200" height="700" role="img" aria-label="Ton poney dans son écurie. Clique directement sur les objets dans l’écurie pour les soins et l’équipement."></canvas>
+            <div id="stable-room" class="stable-room" hidden aria-label="Écurie interactive">
+              <img id="stable-backdrop" alt="Une vraie écurie, avec foin, carottes et équipement à portée de main.">
+              <div class="horse-contact-shadow" aria-hidden="true"></div>
+              <canvas id="stable-actor" width="1200" height="800" role="img" aria-label="Le cheval et sa cavalière dans l’écurie."></canvas>
+              <div id="care-panel" class="care-panel">
+                <button class="object-hotspot" data-care="hay" style="--x:10;--y:73;--w:18;--h:24" aria-label="Donner du foin : botte de foin"><span>Foin</span></button>
+                <button class="object-hotspot" data-care="carrot" style="--x:20;--y:85;--w:19;--h:20" aria-label="Donner une carotte : panier de carottes"><span>Carottes</span></button>
+                <button class="object-hotspot" data-care="brush" style="--x:19;--y:35;--w:16;--h:20" aria-label="Brosser le cheval : brosses"><span>Brosses</span></button>
+                <button class="object-hotspot" data-tack="pad" style="--x:79;--y:30;--w:17;--h:24" aria-label="Installer le tapis"><span>Tapis</span></button>
+                <button class="object-hotspot" data-tack="saddle" style="--x:86;--y:61;--w:17;--h:23" aria-label="Installer la selle"><span>Selle</span></button>
+                <button class="object-hotspot" data-tack="bridle" style="--x:94;--y:29;--w:10;--h:29" aria-label="Installer le filet"><span>Filet</span></button>
+                <button class="object-hotspot" data-care="pet" style="--x:66;--y:33;--w:12;--h:20" aria-label="Caresser le cheval"><span>Caresser</span></button>
+                <button class="object-hotspot" data-care="rest" style="--x:76;--y:80;--w:14;--h:12" aria-label="Repos : coin de paille propre"><span>Repos</span></button>
+                <button id="mount" class="object-hotspot mount-hotspot" style="--x:46;--y:47;--w:14;--h:17" aria-label="Monter sur le cheval"><span>Monter</span></button>
+                <div class="tack-progress" aria-label="Équipement du cheval"><span id="tack-pad">Tapis ○</span><span id="tack-saddle">Selle ○</span><span id="tack-bridle">Filet ○</span></div>
+                <button id="object-labels" class="object-labels" aria-pressed="true">Masquer les noms</button>
+                <div class="care-feedback"><p id="care-message" role="status" aria-live="polite">Clique sur le foin, les carottes ou les brosses pour prendre soin de ton cheval.</p><p id="readiness">Prépare ensuite le tapis, la selle et le filet.</p><div id="action-progress" class="action-progress" hidden><span></span></div></div>
+              </div>
+            </div>
             <div class="hud" id="ride-hud" hidden><span class="star-count">★ <b id="stars">0</b><small>étoiles</small></span><span class="companion"><b id="cleared">0</b> obstacles réussis <span id="faults">Ratés : <b id="fault-count">0 / 3</b></span></span></div>
             <div id="asset-loading" class="asset-loading"><strong>Bienvenue au domaine</strong><span>Préparation de ton cheval et de la prairie…</span></div>
             <div id="webgl-error" class="webgl-error" hidden><h2>La 3D ne peut pas démarrer ici.</h2><p>Ouvre ce jeu dans une version récente de Chrome, Edge, Firefox ou Safari avec WebGL activé.</p></div>
@@ -54,19 +73,7 @@
             <div class="toast" id="toast" role="status" aria-live="polite"></div>
           </div>
           <div class="game-bottom" id="ride-progress" hidden><div class="progress-copy"><span>🌱 Départ</span><span id="progress-label"></span><span>Arrivée 🏡</span></div><div class="progress-track" role="progressbar" aria-label="Progression du parcours" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress"><div id="progress-fill"></div></div></div>
-          <div class="stable-caption" id="stable-caption"><span class="nameplate">NOISETTE</span><p>Du foin tout frais, un pelage tout doux et beaucoup d’amour.</p></div>
-        </section>
-        <section class="care-panel card" id="care-panel" aria-label="Prendre soin du poney">
-          <div class="care-heading"><div><span class="eyebrow">LES PETITES ATTENTIONS</span><h2>Un poney bien dans ses sabots</h2></div><span>♡</span></div>
-          <div class="care-actions">
-            <button data-care="hay"><span>🌾</span><strong>Du foin</strong><small>Pour son repas</small></button>
-            <button data-care="carrot"><span>🥕</span><strong>Une carotte</strong><small>Une friandise</small></button>
-            <button data-care="brush"><span>🧽</span><strong>Le brosser</strong><small>Tout beau, tout propre</small></button>
-            <button data-care="pet"><span>💕</span><strong>Un câlin</strong><small>Entre amis</small></button>
-            <button data-care="rest"><span>💤</span><strong>Se reposer</strong><small>Reprendre des forces</small></button>
-          </div>
-          <p id="care-message" role="status" aria-live="polite">Choisis une petite attention pour ton compagnon.</p>
-          <div class="mount-row"><p id="readiness">Prête pour un parcours ensemble ?</p><button id="mount" class="primary">Mettre la selle et monter →</button></div>
+          <div class="stable-caption" id="stable-caption"><span class="nameplate">NOISETTE</span><p>Prends soin de lui, puis prépare tapis, selle et filet avant de monter.</p></div>
         </section>
         <section class="course-panel card" id="course-panel" hidden aria-label="Choisir un parcours">
           <div class="care-heading"><div><span class="eyebrow">VOTRE PROCHAINE AVENTURE</span><h2>Choisis ton parcours</h2></div><button class="text-button" data-home>⌂ Rentrer au box</button></div>
