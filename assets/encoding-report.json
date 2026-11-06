@@ -84,15 +84,6 @@
       "webp_bytes": 919328
     },
     {
-      "file": "stable-care-carrot",
-      "dimensions": [
-        1199,
-        1312
-      ],
-      "png_bytes": 1400872,
-      "webp_bytes": 892264
-    },
-    {
       "file": "stable-care-pet",
       "dimensions": [
         1536,
@@ -136,6 +127,15 @@
       ],
       "png_bytes": 2143835,
       "webp_bytes": 895788
+    },
+    {
+      "file": "stable-care-carrot",
+      "dimensions": [
+        1199,
+        1312
+      ],
+      "png_bytes": 1361491,
+      "webp_bytes": 883986
     }
   ]
 }
