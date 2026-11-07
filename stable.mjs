@@ -1,5 +1,8 @@
+import { validCharacter } from './characters.mjs';
+import { COURSES } from './engine.mjs';
+import { PONIES } from './ponies.mjs';
 export const SAVE_KEY = 'crins-magiques-ecurie-v1';
-export const PONY_IDS = ['noisette', 'nuage', 'caramel'];
+export const PONY_IDS = Object.keys(PONIES);
 export const NEEDS = ['food', 'clean', 'energy', 'bond'];
 export const TACK_ORDER = ['pad', 'saddle', 'bridle'];
 export const TACK_NAMES = { pad: 'le tapis', saddle: 'la selle', bridle: 'le filet' };
@@ -12,31 +15,35 @@ export const ACTIONS = {
 };
 const clamp = n => Math.min(100, Math.max(0, n));
 export function createStable() {
-  return { version: 1, challengeVersion: 3, chosen: 'noisette', ponies: Object.fromEntries(PONY_IDS.map(id =>
-    [id, { food: 58, clean: 44, energy: 78, bond: 48, tack: { pad: false, saddle: false, bridle: false } }])), rides: 0, stars: 0, records: {} };
+  return { version: 1, challengeVersion: 4, chosen: 'noisette', character: 'emmy', ponies: Object.fromEntries(PONY_IDS.map(id =>
+    [id, { food: 58, clean: 44, energy: 78, bond: 48, resting:false, tack: { pad: false, saddle: false, bridle: false } }])), rides: 0, walks:0, stars: 0, records: {} };
 }
 export function restoreStable(raw) {
   const fresh = createStable();
   try {
     const parsed = JSON.parse(raw);
     if (parsed?.version !== 1) return fresh;
+    fresh.character = validCharacter(parsed.character);
+    if(parsed.chosen==='caramel')parsed.chosen='etoile';
+    if(parsed.ponies?.caramel&&!parsed.ponies.etoile)parsed.ponies.etoile=parsed.ponies.caramel;
     if (PONY_IDS.includes(parsed.chosen)) fresh.chosen = parsed.chosen;
     for (const id of PONY_IDS) for (const need of NEEDS) {
       const n = parsed.ponies?.[id]?.[need];
       if (typeof n === 'number' && Number.isFinite(n)) fresh.ponies[id][need] = clamp(n);
     }
     for (const id of PONY_IDS) {
+      fresh.ponies[id].resting=parsed.ponies?.[id]?.resting===true;
       const saved = parsed.ponies?.[id]?.tack;
       const tack = fresh.ponies[id].tack;
       tack.pad = saved?.pad === true;
       tack.saddle = tack.pad && saved?.saddle === true;
       tack.bridle = tack.saddle && saved?.bridle === true;
     }
-    for (const key of ['rides', 'stars']) {
+    for (const key of ['rides', 'walks', 'stars']) {
       if (Number.isSafeInteger(parsed[key]) && parsed[key] >= 0) fresh[key] = parsed[key];
     }
-    for (const course of ['prairie', 'garden', 'forest']) {
-      const record = parsed.challengeVersion === 3 ? parsed.records?.[course] : null;
+    for (const course of [...Object.keys(COURSES),...['emmy','louane'].flatMap(id=>Object.keys(COURSES).map(course=>id+':'+course))]) {
+      const record = parsed.challengeVersion === 4 ? parsed.records?.[course] : null;
       const count = 10;
       if (record && Number.isInteger(record.clear) && record.clear >= 0 && record.clear <= count &&
           Number.isInteger(record.stars) && record.stars >= 0 && record.stars <= count * 3) {
@@ -49,6 +56,7 @@ export function restoreStable(raw) {
 export function care(pony, action) {
   if (!Object.hasOwn(ACTIONS, action)) return false;
   for (const [key, amount] of Object.entries(ACTIONS[action])) pony[key] = clamp(pony[key] + amount);
+  pony.resting=action==='rest';
   return true;
 }
 export function mood(pony) {
@@ -78,12 +86,28 @@ export function fitTack(pony, item) {
   const prerequisite = TACK_ORDER.slice(0, index).find(key => !pony.tack[key]);
   if (prerequisite) return { ok: false, message: `Commence par ${TACK_NAMES[prerequisite]}.` };
   pony.tack[item] = true;
+  pony.resting=false;
   return { ok: true, message: `${TACK_NAMES[item][0].toUpperCase()+TACK_NAMES[item].slice(1)} est installé${item === 'saddle' ? 'e' : ''} !` };
 }
 export function removeTack(pony) {
   const wasEquipped = TACK_ORDER.some(key => pony.tack?.[key]);
   pony.tack = { pad: false, saddle: false, bridle: false };
   return wasEquipped;
+}
+export function prepareForRide(pony) {
+  pony.resting=false;
+  const actions = [];
+  if (rideReadiness(pony)) {
+    removeTack(pony);
+    // Rest first: it uses a little food, which is replenished before saddling.
+    for (const [need, minimum, action] of [['energy', 25, 'rest'], ['food', 25, 'hay'], ['clean', 20, 'brush']]) {
+      while (pony[need] < minimum) { care(pony, action); actions.push(action); }
+    }
+  }
+  for (const item of TACK_ORDER) {
+    if (!pony.tack?.[item] && fitTack(pony, item).ok) actions.push(item);
+  }
+  return actions;
 }
 export function settleRide(stable, id, game) {
   // Each ride is charged once, including an early return. No needs decay offline.
@@ -96,11 +120,13 @@ export function settleRide(stable, id, game) {
   pony.clean = clamp(pony.clean - 28 * fraction);
   pony.bond = clamp(pony.bond + 8 * fraction);
   if (game.status === 'finished') {
+    if(game.activity==='trail'){stable.walks=(stable.walks||0)+1;pony.bond=clamp(pony.bond+4);return true;}
     stable.rides++;
     stable.stars += game.stars;
-    const previous = stable.records[game.course];
+    const key=game.character?game.character+':'+game.course:game.course;
+    const previous = stable.records[key];
     if (!previous || game.cleared > previous.clear || (game.cleared === previous.clear && game.stars > previous.stars)) {
-      stable.records[game.course] = { clear: game.cleared, stars: game.stars };
+      stable.records[key] = { clear: game.cleared, stars: game.stars };
     }
   }
   return true;

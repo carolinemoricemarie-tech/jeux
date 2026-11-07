@@ -136,6 +136,42 @@
       ],
       "png_bytes": 1361491,
       "webp_bytes": 883986
+    },
+    {
+      "file": "paddock-background",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "png_bytes": 4019827,
+      "webp_bytes": 2732852
+    },
+    {
+      "file": "pony-free",
+      "dimensions": [
+        1254,
+        1254
+      ],
+      "png_bytes": 1493153,
+      "webp_bytes": 947878
+    },
+    {
+      "file": "demo-paddock",
+      "dimensions": [
+        1774,
+        887
+      ],
+      "png_bytes": 852844,
+      "webp_bytes": 543860
+    },
+    {
+      "file": "play-ball",
+      "dimensions": [
+        1536,
+        1024
+      ],
+      "png_bytes": 2014523,
+      "webp_bytes": 937078
     }
   ]
 }

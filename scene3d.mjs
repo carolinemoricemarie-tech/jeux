@@ -1,6 +1,9 @@
-import { loadPhotos, photoTexture, cutout, photoPony } from './photo-assets.mjs';
+import { loadPhotos, photoTexture, cutout, photoPony, mountedTextures } from './photo-assets.mjs';
 import * as THREE from './vendor/three.module.min.mjs';
-import { BOUNDS, createGame, jumpFrame } from './engine.mjs';
+import { BOUNDS, createGame, jumpFrame, JUMP_DURATION } from './engine.mjs';
+import { rearChaseCamera } from './course-camera.mjs';
+import { cyclePose,jumpPose,damp,clamp,advanceLanding,detailPose } from './animation.mjs';
+import {createTrailScene} from './trail-scene.mjs';
 
 const sphereGeometry=new THREE.SphereGeometry(1,24,16);
 const boxGeometry=new THREE.BoxGeometry(1,1,1);
@@ -56,14 +59,17 @@ export class PonyWorld {
     const software=info&&/swiftshader|llvmpipe|software/i.test(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
     this.software=!!software;this.lastRenderAt=-1000;
     this.shadowSize=software?512:matchMedia('(max-width:700px)').matches?1024:2048;
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,this.shadowSize<2048?1.25:1.75));
-    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,software?1:this.shadowSize<2048?1.25:1.75));
+    this.renderer.shadowMap.enabled=true;this.renderer.shadowMap.type=THREE.PCFSoftShadowMap;this.renderer.shadowMap.autoUpdate=false;this.renderer.shadowMap.needsUpdate=true;
     this.renderer.outputColorSpace=THREE.SRGBColorSpace;this.renderer.toneMapping=THREE.ACESFilmicToneMapping;this.renderer.toneMappingExposure=1.02;
     this.renderer.setClearColor('#bdcbb8');
     this.camera=new THREE.PerspectiveCamera(52,1,.1,450);this.lookAt=v(0,1.8,0);
     this.arena=new THREE.Scene();this.arena.fog=new THREE.FogExp2('#ccd6d9',.0025);
     this.barn=new THREE.Scene();this.barn.background=new THREE.Color('#d3c5a9');this.barn.fog=new THREE.Fog('#d3c5a9',22,65);
     this.pony=photoPony(photos);this.barn.add(this.pony.root);
+    this.characterTextures=new Map();
+    this.trailScenes=new Map();this.ponyKind='bay';
+    if(photos.jump.characterId)this.characterTextures.set(photos.jump.characterId+':bay',{stride:this.pony.stride,jumping:this.pony.jumping});
     this.shadow=new THREE.Mesh(new THREE.PlaneGeometry(2.5,4),new THREE.MeshBasicMaterial({map:shadowTexture(),transparent:true,depthWrite:false}));this.shadow.rotation.x=-Math.PI/2;this.shadow.position.y=.018;this.barn.add(this.shadow);
     this.sceneName='stable';this.setupLights(this.arena,true);this.setupLights(this.barn,false);
     this.setupArena();this.setupBarn();this.buildCourse('prairie');
@@ -84,7 +90,8 @@ export class PonyWorld {
     const skyGeometry=new THREE.SphereGeometry(380,64,32);
     const uv=skyGeometry.attributes.uv;
     for(let i=0;i<uv.count;i++)uv.setY(i,.18+.82*Math.pow(Math.max(0,uv.getY(i)*2-1),.9));
-    const sky=new THREE.Mesh(skyGeometry,new THREE.MeshBasicMaterial({map:photoTexture(this.photos.sky),side:THREE.BackSide,depthWrite:false,toneMapped:false}));scene.add(sky);
+    const skyMap=photoTexture(this.photos.sky);skyMap.wrapS=THREE.MirroredRepeatWrapping;skyMap.repeat.x=2;
+    const sky=new THREE.Mesh(skyGeometry,new THREE.MeshBasicMaterial({map:skyMap,side:THREE.BackSide,depthWrite:false,toneMapped:false,fog:false}));scene.add(sky);
     const grassMap=photoTexture(this.photos.grass);grassMap.wrapS=grassMap.wrapT=THREE.RepeatWrapping;grassMap.repeat.set(175,175);
     const grass=new THREE.MeshStandardMaterial({map:grassMap,color:'#b2b9a6',roughness:.97});
     const ground=mesh(scene,new THREE.PlaneGeometry(700,700),grass,[0,-.015,0],[1,1,1],false);ground.rotation.x=-Math.PI/2;
@@ -133,7 +140,7 @@ export class PonyWorld {
       #endif
     `);};
     mat.customProgramCacheKey=()=> 'meadow-grass-wind';
-    const field=new THREE.InstancedMesh(geometry,mat,this.software?6000:26000),dummy=new THREE.Object3D(),r=random(912);
+    const field=new THREE.InstancedMesh(geometry,mat,this.software?4000:26000),dummy=new THREE.Object3D(),r=random(912);
     for(let i=0;i<field.count;i++){
       dummy.position.set(-48+r()*108,0,-52+r()*109);dummy.rotation.y=r()*Math.PI*2;dummy.scale.set(.04+r()*.03,.045+r()*.075,1);dummy.updateMatrix();field.setMatrixAt(i,dummy.matrix);
       field.setColorAt(i,new THREE.Color().setHSL(.23+r()*.055,.3+r()*.15,.24+r()*.14));
@@ -183,8 +190,9 @@ export class PonyWorld {
   }
   buildCourse(id){
     if(this.course===id)return;this.course=id;this.preview=createGame('gentle',id);
+    this.renderer.shadowMap.needsUpdate=true;
     const materials=new Set(),geometries=new Set();
-    this.gateGroup.traverse(o=>{if(o.isSprite&&o.userData.ownTexture)o.material.map?.dispose();if(o.material)materials.add(o.material);if(o.geometry&&![sphereGeometry,boxGeometry,cylinderGeometry].includes(o.geometry))geometries.add(o.geometry);});
+    this.gateGroup.traverse(o=>{if(o.userData.ownTexture)o.material.map?.dispose();if(o.material)materials.add(o.material);if(!o.isSprite&&o.geometry&&![sphereGeometry,boxGeometry,cylinderGeometry].includes(o.geometry))geometries.add(o.geometry);});
     materials.forEach(m=>m.dispose());geometries.forEach(g=>g.dispose());
     this.gateGroup.clear();this.gates=[];
     const white=material('#f3eee0'),wood=material('#9e8770'),colors=['#8ca6a3','#bb8891','#99a875'];
@@ -192,10 +200,11 @@ export class PonyWorld {
     for(const [i,gate] of course.obstacles.entries()){
       const group=new THREE.Group();group.position.set(gate.x,0,gate.z);group.rotation.y=gate.yaw;this.gateGroup.add(group);
       const accent=material(colors[(i+(id==='garden'?1:0))%3]);
+      const standardHeight=Math.max(1.25,gate.height+.4);
       for(const side of [-1,1]){
-        box(group,white,[side*gate.width/2,1,0],[.26,2,.32]);box(group,wood,[side*gate.width/2,.1,0],[.95,.2,.85]);
-        for(let h=0;h<4;h++)box(group,accent,[side*gate.width/2-.01,.4+h*.39,0],[.29,.12,.35]);
-        const cap=orb(group,white,[side*gate.width/2,2.04,0],[.22,.12,.22]);
+        box(group,white,[side*gate.width/2,standardHeight/2,0],[.18,standardHeight,.24]);box(group,wood,[side*gate.width/2,.07,0],[.7,.14,.7]);
+        for(let h=0;h<4;h++)box(group,accent,[side*gate.width/2,.3+h*(standardHeight-.45)/4,0],[.19,.1,.25]);
+        const cap=orb(group,white,[side*gate.width/2,standardHeight+.04,0],[.15,.08,.15]);
         box(group,wood,[side*(gate.width/2+1),.2,.1],[1,.4,1]);
         const shrub=new THREE.Sprite(new THREE.SpriteMaterial({map:this.shrubTexture,transparent:true,alphaTest:.19,toneMapped:false}));shrub.position.set(side*(gate.width/2+1),.8,.1);shrub.scale.set(1.1,1.2,1);group.add(shrub);
       }
@@ -206,25 +215,66 @@ export class PonyWorld {
         for(let j=0;j<7;j++){const stripe=mesh(bar,cylinderGeometry,accent,[(j-3)*gate.width/7,0,0],[.069,.4,.069]);stripe.rotation.z=Math.PI/2;}
         beams.push(bar);
       }
-      const flagMat=material('#bb6c6e');for(const side of [-1,1]){const flag=mesh(group,new THREE.PlaneGeometry(.38,.3),side===1?flagMat:white,[side*gate.width/2+.23,1.8,0],[1,1,1]);flag.material.side=THREE.DoubleSide;}
-      const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(String(i+1)),transparent:true}));sprite.userData.ownTexture=true;sprite.position.set(0,2.8,0);sprite.scale.set(1.1,1.1,1);group.add(sprite);
+      const flagMat=material('#bb6c6e');for(const side of [-1,1]){const flag=mesh(group,new THREE.PlaneGeometry(.28,.2),side===1?flagMat:white,[side*gate.width/2+.14,standardHeight-.12,0],[1,1,1]);flag.material.side=THREE.DoubleSide;}
+      const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(String(i+1)),transparent:true}));sprite.userData.ownTexture=true;sprite.position.set(gate.width/2+.65,.43,.35);sprite.scale.set(.62,.62,1);group.add(sprite);
+      box(group,white,[gate.width/2+.65,.2,.35],[.045,.4,.045]);
       const ring=new THREE.Mesh(new THREE.RingGeometry(.9,1,48),new THREE.MeshBasicMaterial({color:'#edc570',side:THREE.DoubleSide,transparent:true,opacity:.7,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.scale.set(4.3,1.5,1);ring.position.y=.025;group.add(ring);
       this.gates.push({group,beams,sprite,ring});
     }
+    const last=course.obstacles.at(-1),finish=new THREE.Group();finish.position.set(last.x,0,last.z);finish.rotation.y=last.yaw;this.gateGroup.add(finish);
+    for(const side of [-1,1])box(finish,white,[side*(last.width/2+1),2.2,-3.7],[.22,4.4,.22]);
+    box(finish,white,[0,4.4,-3.7],[last.width+2.2,.3,.25]);
+    const sign=document.createElement('canvas');sign.width=512;sign.height=96;const sc=sign.getContext('2d');sc.fillStyle='#fff8df';sc.fillRect(0,0,512,96);sc.fillStyle='#3d674e';sc.font='bold 53px Trebuchet MS';sc.textAlign='center';sc.fillText('ARRIVÉE',256,67);
+    const banner=mesh(finish,new THREE.PlaneGeometry(last.width*.8,1),new THREE.MeshBasicMaterial({map:photoTexture(sign),side:THREE.DoubleSide,toneMapped:false}),[0,4.4,-3.53],[1,1,1],false);banner.userData.ownTexture=true;
+    const checked=document.createElement('canvas');checked.width=256;checked.height=32;const cc=checked.getContext('2d');for(let x=0;x<16;x++)for(let y=0;y<2;y++){cc.fillStyle=(x+y)%2?'#faf6df':'#435646';cc.fillRect(x*16,y*16,16,16);}
+    const line=mesh(finish,new THREE.PlaneGeometry(last.width+1,.8),new THREE.MeshBasicMaterial({map:photoTexture(checked),side:THREE.DoubleSide,toneMapped:false}),[0,.032,-3.7],[1,1,1],false);line.rotation.x=-Math.PI/2;line.userData.ownTexture=true;
   }
-  updatePony(p,needs,time,game,effect){
+  setCharacter(id,kind=this.ponyKind){
+    const images=this.photos.characters[id];if(!images)return;
+    this.characterId=id;this.ponyKind=kind;
+    this.characterTextures ||= new Map();
+    const key=id+':'+kind;
+    if(!this.characterTextures.has(key)){
+      this.characterTextures.set(key,mountedTextures(kind==='unicorn'?{...images,courseRear:images.unicornRear}:images));
+    }
+    const textures=this.characterTextures.get(key);this.pony.stride=textures.stride;this.pony.jumping=textures.jumping;
+    this.pony.mounted.material.map=textures.stride;this.pony.mounted.material.needsUpdate=true;
+    this.canvas.dataset.rider=id;
+  }
+  updatePony(p,needs,time,game,effect,dt){
     const pony=this.pony,stable=this.sceneName==='stable';
     pony.mounted.visible=!stable;pony.standing.visible=stable;
-    const coat=p.name==='Nuage'?1:p.name==='Caramel'?2:0;
+    const coat=p.kind==='white'?1:0;
     pony.mounted.material.userData.coat.value=coat;pony.standing.material.userData.coat.value=coat;
+    const apply=(texture,pose)=>{
+      pose=detailPose(pose);
+      if(pony.mounted.material.map!==texture){pony.mounted.material.map=texture;pony.mounted.material.needsUpdate=true;}
+      texture.offset.x=pose.from/8;pony.mounted.material.userData.poseMix.value=this.reducedMotion?0:pose.mix;
+      pony.mounted.material.userData.poseDelta.value=(pose.to-pose.from)/8;
+    };
+    if(this.motionGame!==game){this.motionGame=game;this.gaitDistance=0;this.previousTravel=game?.traveled||0;this.previousHeading=game?.heading||0;this.wasJumping=false;this.terminalLanding=null;}
     if(game?.status==='playing'){
       const jumping=game.jumpActive;
       const texture=jumping?pony.jumping:pony.stride;
-      if(pony.mounted.material.map!==texture){pony.mounted.material.map=texture;pony.mounted.material.needsUpdate=true;}
-      const frame=jumping?jumpFrame(game):game.speed>.3?Math.floor(time*(6+game.speed*.6))%8:0;
-      texture.offset.x=frame/8;this.canvas.dataset.jumpPhase=jumping?String(frame):'ground';
+      const traveled=Math.max(0,game.traveled-this.previousTravel);this.previousTravel=game.traveled;
+      if(!jumping)this.gaitDistance+=traveled;
+      if(this.wasJumping&&!jumping)this.gaitDistance=0;this.wasJumping=jumping;
+      const pose=jumping?jumpPose(game.jumpTime):game.speed>.05?cyclePose(this.gaitDistance/5.2*8):{from:0,to:0,mix:0};
+      apply(texture,pose);this.canvas.dataset.jumpPhase=jumping?String(jumpFrame(game)):'ground';this.canvas.dataset.poseBlend=String(pose.mix);
+      pony.body.position.y=game.height;
+      const angle=Math.atan2(Math.sin(game.heading-this.previousHeading),Math.cos(game.heading-this.previousHeading));this.previousHeading=game.heading;
+      const bank=this.reducedMotion?0:clamp(angle/Math.max(.001,dt)*.025,-.035,.035);
+      pony.body.rotation.z=damp(pony.body.rotation.z,bank,8,dt);
+    }else if(game&&['finished','lost'].includes(game.status)){
+      this.terminalLanding ||= {height:game.height,velocity:game.velocity,time:game.jumpActive?game.jumpTime:JUMP_DURATION};
+      const landing=advanceLanding(this.terminalLanding,dt);pony.body.position.y=landing.height;
+      const jumping=landing.time<JUMP_DURATION||landing.height>0;
+      apply(jumping?pony.jumping:pony.stride,jumping?jumpPose(landing.time):{from:0,to:0,mix:0});
+      pony.body.rotation.z=damp(pony.body.rotation.z,0,8,dt);
+    }else if(!game||['countdown','preview'].includes(game.status)){
+      pony.body.position.y=0;pony.body.rotation.z=0;apply(pony.stride,{from:0,to:0,mix:0});
     }
-    pony.body.position.y=game?.height||0;
+    if(game?.status!=='paused')pony.body.scale.y=this.reducedMotion?1:1+Math.sin(time*1.8)*.0015;
     if(stable){
       const action=effect?.action;
       this.carrot.visible=action==='carrot';this.haySnack.visible=action==='hay';
@@ -235,10 +285,20 @@ export class PonyWorld {
   }
   render(view,game,p,needs,effect,time,dt,course){
     if(view==='stable'){this.sceneName='stable';this.lastCourseView=false;return;}
-    const now=performance.now();if(now-this.lastRenderAt<1000/(this.software?15:30))return;this.lastRenderAt=now;
+    const now=performance.now();if(this.software&&now-this.lastRenderAt<1000/30-1)return;
+    dt=this.lastRenderAt<0?dt:Math.min(.1,(now-this.lastRenderAt)/1000);this.lastRenderAt=now;
     const switching=this.sceneName!==view;
-    if(switching){this.sceneName=view;(view==='stable'?this.barn:this.arena).add(this.pony.root,this.shadow);this.resize();}
-    this.updatePony(p,needs,time,game,effect);
+    let scenery=null;
+    if(view==='trail'){
+      if(!this.trailScenes.has(game.theme)){
+        const trailScene=createTrailScene(this.photos,game.theme,{software:this.software,shadowSize:this.shadowSize});
+        this.batchScenery(trailScene.scene);this.trailScenes.set(game.theme,trailScene);
+      }
+      scenery=this.trailScenes.get(game.theme);scenery.animate(time);
+    }
+    const activeScene=scenery?.scene||this.arena;
+    if(switching||this.pony.root.parent!==activeScene){this.sceneName=view;activeScene.add(this.pony.root,this.shadow);this.renderer.shadowMap.needsUpdate=true;this.resize();}
+    this.updatePony(p,needs,time,game,effect,dt);
     if(this.grassWind)this.grassWind.value=this.reducedMotion?0:time;
     if(view==='stable'){
       this.pony.root.position.set(0,0,0);this.pony.root.rotation.set(0,0,0);this.shadow.position.set(0,.018,0);
@@ -246,23 +306,42 @@ export class PonyWorld {
       this.camera.position.set(4.8,3.0,-5.7);this.camera.lookAt(0,1.6,.1);this.renderer.render(this.barn,this.camera);return;
     }
     if(this.camera.fov!==52){this.camera.fov=52;this.camera.updateProjectionMatrix();}
-    this.buildCourse(course);
-    const state=game||this.preview;
+    if(view!=='trail')this.buildCourse(course);
+    let state=game||this.preview;
+    if(game?.status==='finished'){
+      if(this.finishedGame!==game){this.finishedGame=game;this.finishTravel=0;}
+      this.finishTravel=Math.min(5.7,this.finishTravel+Math.max(dt,.001)*3);
+      state={...game,x:game.x-Math.sin(game.heading)*this.finishTravel,z:game.z-Math.cos(game.heading)*this.finishTravel,speed:this.finishTravel<5.7?3:0};
+      if(this.pony.mounted.material.map===this.pony.stride){
+        const pose=state.speed?detailPose(cyclePose(this.finishTravel/5.2*8)):{from:0,to:0,mix:0};
+        this.pony.stride.offset.x=pose.from/8;this.pony.mounted.material.userData.poseMix.value=this.reducedMotion?0:pose.mix;this.pony.mounted.material.userData.poseDelta.value=(pose.to-pose.from)/8;
+      }
+    }else{this.finishedGame=null;this.finishTravel=0;}
     this.pony.mounted.visible=true;this.pony.standing.visible=false;
     this.pony.root.position.set(state.x,0,state.z);this.pony.root.rotation.set(0,state.heading,0);
     this.shadow.position.set(state.x,.018,state.z);this.shadow.rotation.z=state.heading;
-    this.shadow.material.opacity=1-(state.height||0)*.2;
+    const visualHeight=this.pony.body.position.y;
+    this.shadow.material.opacity=1-visualHeight*.2;
     const sin=Math.sin(state.heading),cos=Math.cos(state.heading);
-    const desired=v(state.x+sin*7.4+cos*3.0,4.3+(state.height||0)*.25,state.z+cos*7.4-sin*3.0);
-    const look=v(state.x-sin*2.5,1.7+(state.height||0)*.45,state.z-cos*2.5);
+    const desired=v(state.x+sin*7.4+cos*3.0,4.3+visualHeight*.25,state.z+cos*7.4-sin*3.0);
+    const look=v(state.x-sin*2.5,1.7+visualHeight*.45,state.z-cos*2.5);
     const smooth=1-Math.exp(-Math.max(dt,.001)*5);
-    if(switching||!this.lastCourseView){this.camera.position.copy(desired);this.lookAt.copy(look);}else{this.camera.position.lerp(desired,smooth);this.lookAt.lerp(look,smooth);}
+    if(this.pony.rear){
+      const rear=rearChaseCamera(state,visualHeight);
+      this.camera.position.set(rear.position.x,rear.position.y,rear.position.z);this.lookAt.set(rear.target.x,rear.target.y,rear.target.z);
+    }else if(switching||!this.lastCourseView){this.camera.position.copy(desired);this.lookAt.copy(look);}else{this.camera.position.lerp(desired,smooth);this.lookAt.lerp(look,smooth);}
     this.lastCourseView=true;this.camera.lookAt(this.lookAt);
+    this.canvas.dataset.facing=this.pony.rear?'rear':'profile';this.canvas.dataset.heading=String(state.heading);
+    this.canvas.dataset.cameraX=String(this.camera.position.x);this.canvas.dataset.cameraZ=String(this.camera.position.z);
+    this.canvas.dataset.horseX=String(state.x);this.canvas.dataset.horseZ=String(state.z);
+    this.canvas.dataset.ponyKind=p.kind||'bay';
+    if(view==='trail'){this.canvas.dataset.theme=game.theme;this.renderer.render(activeScene,this.camera);return;}
     const gate=state.obstacles[state.next];
     for(const [i,g] of this.gates.entries()){
-      g.ring.visible=i===state.next;g.sprite.material.opacity=i<state.next ? .45 : 1;
-      g.sprite.scale.setScalar(i===state.next?1.5:1.05);g.sprite.position.y=i===state.next?3.15:2.6;
+      g.ring.visible=i===state.next;g.sprite.visible=i>=state.next;g.sprite.material.opacity=1;
+      g.sprite.scale.setScalar(i===state.next?.78:.62);
       const hit=state.obstacles[i]?.touched;
+      if(g.lastHit!==hit){g.lastHit=hit;this.renderer.shadowMap.needsUpdate=true;}
       for(const [j,beam] of g.beams.entries()){beam.rotation.z=hit?(j%2?.12:-.1):0;beam.position.y=hit ? .15+j*.13 : state.obstacles[i].height*(j?1:.5);}
     }
     this.guideGroup.visible=!!gate;
@@ -273,7 +352,7 @@ export class PonyWorld {
     const a=this.dustGeo.attributes.position;
     for(let i=0;i<a.count;i++){
       const t=(time*.8+i*.073)%1;
-      a.setXYZ(i,state.x+sin*(1+t*2)+Math.sin(i*8)*.5,state.height||state.speed<2?-5:.1+t*.55,state.z+cos*(1+t*2)+Math.cos(i*7)*.5);
+      a.setXYZ(i,state.x+sin*(1+t*2)+Math.sin(i*8)*.5,visualHeight||state.speed<2?-5:.1+t*.55,state.z+cos*(1+t*2)+Math.cos(i*7)*.5);
     }
     a.needsUpdate=true;this.renderer.render(this.arena,this.camera);
   }

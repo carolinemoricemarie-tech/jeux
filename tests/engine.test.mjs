@@ -61,7 +61,7 @@ test('Les limites retiennent le poney dans la carrière et autorisent un retour 
   assert.ok(game.x>=BOUNDS.minX);assert.equal(resetToTarget(game),true);
   assert.ok(game.x>BOUNDS.minX);
 });
-test('Les trois circuits se terminent avec les virages et sauts correctement placés',()=>{
+test('Les neuf circuits se terminent avec les virages et sauts correctement placés',()=>{
   for(const [id,config] of Object.entries(COURSES)){
     const game=createGame('gentle',id);
     for(let i=0;i<24000&&game.status==='playing';i++){
@@ -86,6 +86,25 @@ test('Chaque thème contient exactement dix obstacles',()=>{
   for(const id of Object.keys(COURSES)){
     const game=createGame('gentle',id);assert.equal(game.obstacles.length,10);assert.equal(game.finish,10);
   }
+});
+test('Les neuf tracés proposent trois niveaux et des hauteurs réellement différentes',()=>{
+  const counts={beginner:0,intermediate:0,hard:0},routes=new Set();
+  for(const [id,config] of Object.entries(COURSES)){
+    counts[config.level]++;const game=createGame('gentle',id);routes.add(JSON.stringify(game.obstacles.map(g=>[g.x,g.z])));
+    assert.ok(game.obstacles.every(g=>g.height>=config.height-1e-8&&g.height<=config.maxHeight+1e-8));
+    assert.ok(new Set(game.obstacles.map(g=>g.height)).size>1);
+  }
+  assert.deepEqual(counts,{beginner:3,intermediate:3,hard:3});assert.equal(routes.size,9);
+});
+test('Le décompte dure trois secondes et ne déplace jamais le poney avant le départ',()=>{
+  const g=createGame('gentle','prairie',{countdown:true});assert.equal(g.status,'countdown');assert.equal(jump(g),false);assert.equal(resetToTarget(g),false);
+  run(g,2.9,{up:true,left:true});assert.equal(g.status,'countdown');assert.equal(g.x,0);assert.equal(g.z,40);assert.equal(g.heading,0);assert.equal(g.speed,0);
+  const events=run(g,.1);assert.equal(g.status,'playing');assert.equal(g.z,40);assert.equal(events.filter(e=>e==='start').length,1);
+  advance(g,.1,{up:true});assert.ok(g.z<40);
+});
+test('Mettre le décompte en pause conserve exactement le temps restant',()=>{
+  const g=createGame('gentle','prairie',{countdown:true});run(g,.7);g.status='paused';const snapshot=structuredClone(g);run(g,5);assert.deepEqual(g,snapshot);
+  g.status='countdown';run(g,2.3);assert.equal(g.status,'playing');assert.equal(g.x,0);assert.equal(g.z,40);
 });
 test('La troisième erreur perd immédiatement la partie et fige toutes les commandes',()=>{
   const game=createGame();
