@@ -31,9 +31,9 @@ export const COURSES = {
   garden: { name:'Le jardin des rubans',icon:'🎀',level:'intermediate',height:.85,maxHeight:1.00,width:4,route:3 },
   river: { name:'Les méandres du ruisseau',icon:'💧',level:'intermediate',height:.95,maxHeight:1.10,width:3.9,route:4 },
   mill: { name:'Le tour du vieux moulin',icon:'🌾',level:'intermediate',height:1.00,maxHeight:1.15,width:3.8,route:5 },
-  forest: { name:'La forêt enchantée',icon:'🌲',level:'hard',height:1.10,maxHeight:1.25,width:3.7,route:6 },
-  stars: { name:'Le défi des étoiles',icon:'⭐',level:'hard',height:1.15,maxHeight:1.30,width:3.6,route:7 },
-  rainbow: { name:'Le grand prix arc-en-ciel',icon:'🌈',level:'hard',height:1.25,maxHeight:1.40,width:3.5,route:8 }
+  forest: { name:'La forêt enchantée',icon:'🌲',level:'hard',height:1.10,maxHeight:1.25,width:4.6,route:6 },
+  stars: { name:'Le défi des étoiles',icon:'⭐',level:'hard',height:1.15,maxHeight:1.30,width:4.6,route:7 },
+  rainbow: { name:'Le grand prix arc-en-ciel',icon:'🌈',level:'hard',height:1.25,maxHeight:1.40,width:4.6,route:8 }
 };
 for(const config of Object.values(COURSES)){
   config.count=10;
@@ -46,15 +46,15 @@ const ROUTES = [
   [[0,22],[4,4],[-7,-12],[6,-31],[27,-35],[43,-16],[35,5],[43,24],[22,38],[-4,35]],
   [[0,22],[-10,6],[-1,-11],[-20,-29],[0,-40],[23,-29],[37,-9],[24,8],[37,27],[12,39]],
   [[0,22],[14,8],[25,-9],[9,-23],[-9,-37],[-28,-20],[-19,0],[-30,19],[-9,36],[13,34]],
-  [[0,22],[12,8],[-3,-5],[11,-20],[30,-32],[43,-16],[29,0],[43,17],[24,32],[2,35]],
-  [[0,22],[-13,8],[1,-8],[-13,-25],[8,-37],[31,-28],[42,-7],[25,8],[39,27],[16,40]],
-  [[0,22],[15,6],[1,-10],[17,-28],[37,-34],[44,-12],[27,4],[40,22],[19,38],[-4,32]]
+  [[0,23],[0,4],[4,-17],[18,-33],[39,-27],[49,-7],[45,16],[28,34],[5,40],[-18,41]],
+  [[0,23],[0,3],[-5,-18],[-18,-33],[-35,-28],[-40,-6],[-33,18],[-16,40],[9,45],[32,31]],
+  [[0,24],[-4,3],[-8,-19],[8,-37],[32,-34],[48,-15],[48,11],[31,34],[6,43],[-19,34]]
 ];
 export function createGame(pace='gentle', course='prairie', {countdown=false,character='louane'}={}) {
   if (!COURSES[course]) course='prairie';
   const config=COURSES[course],points=ROUTES[config.route];
   const obstacles=points.map(([x,z],i)=>{
-    const prev=points[i-1]||[0,40], next=points[i+1]||[x,z-16];
+    const prev=points[i-1]||[0,40], next=points[i+1]||[x+(x-prev[0]),z+(z-prev[1])];
     return { x,z,yaw:Math.atan2(-(next[0]-prev[0]),-(next[1]-prev[1])),width:config.width,
       height:config.height+(config.maxHeight-config.height)*(i%4)/3,passed:false,touched:false };
   });

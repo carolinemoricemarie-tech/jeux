@@ -28,7 +28,7 @@ const result=await build({
         }
         urls.characterPortraits=await embed(manifest.portraits);
         if(Object.keys(characters).join(',')!=='emmy,louane')throw new Error('Les deux cavalières sont requises.');
-        const expected=[...replaced,'paddock','courseRear','paddockMotion','careIdle','unicornRear','whiteCare','unicornCare','whiteRear','walkDirections'];
+        const expected=[...replaced,'paddock','courseRear','paddockMotion','careIdle','unicornRear','whiteCare','unicornCare','whiteRear','walkDirections','stableActions','feedActions'];
         for(const [id,images] of Object.entries(characters))for(const key of expected)if(!images[key])throw new Error('Visuel manquant : '+id+'/'+key);
       }
       return {contents:'export const PHOTO_URLS='+JSON.stringify(urls)+'; export const CHARACTER_URLS='+JSON.stringify(characters)+';',loader:'js'};

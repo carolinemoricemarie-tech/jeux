@@ -3,6 +3,7 @@ import {BOXES,centreLocation,centreInteractions} from './centre.mjs';
 import {photoTexture,cutout,horseMaterial} from './photo-assets.mjs';
 import {cyclePose,detailPose} from './animation.mjs';
 import {actorAtlas} from './actor-atlas.mjs';
+import {characterView} from './character-view.mjs';
 const unit=new THREE.BoxGeometry(1,1,1),post=new THREE.CylinderGeometry(1,1,1,8);
 function block(parent,mat,x,y,z,w,h,d){const m=new THREE.Mesh(unit,mat);m.position.set(x,y,z);m.scale.set(w,h,d);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
 function tile(image,repeat=1){const t=photoTexture(image);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(repeat,repeat);return t;}
@@ -18,10 +19,11 @@ function actorTexture(image,columns=4,rows=4){
   const t=photoTexture(c);t.repeat.set(1/a.frames.length,1);return{texture:t,count:a.frames.length};
 }
 function figure(map,height,width=height){const m=new THREE.Mesh(new THREE.PlaneGeometry(width,height).translate(0,height/2,0),new THREE.MeshBasicMaterial({map,transparent:true,alphaTest:.18,toneMapped:false,fog:true,side:THREE.DoubleSide}));m.renderOrder=2;return m;}
+function contactShadow(width,depth){const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),g=x.createRadialGradient(32,32,2,32,32,32);g.addColorStop(0,'#241e1a70');g.addColorStop(1,'#241e1a00');x.fillStyle=g;x.fillRect(0,0,64,64);const m=new THREE.Mesh(new THREE.PlaneGeometry(width,depth),new THREE.MeshBasicMaterial({map:photoTexture(c),transparent:true,depthWrite:false}));m.rotation.x=-Math.PI/2;m.renderOrder=1;return m;}
 function batch(root){root.updateMatrixWorld(true);const groups=new Map();root.traverse(m=>{if(m.isMesh&&!m.isInstancedMesh&&m.geometry===unit){const k=m.material.uuid;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(m);}});for(const entries of groups.values()){if(entries.length<3)continue;const m=new THREE.InstancedMesh(unit,entries[0].material,entries.length);m.castShadow=true;m.receiveShadow=true;entries.forEach((e,i)=>{m.setMatrixAt(i,e.matrixWorld);e.removeFromParent();});root.add(m);}}
 export class CentreScene{
   constructor(photos,{shadowSize=1024}={}){
-    this.photos=photos;this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#c3d5d8');this.scene.fog=new THREE.Fog('#c3d5d8',65,145);this.static=new THREE.Group();this.scene.add(this.static);this.doors=new Map();this.jobs=new Map();this.horses=[];this.props=[];this.people=new Map();
+    this.photos=photos;this.scene=new THREE.Scene();this.scene.background=new THREE.Color('#c3d5d8');this.scene.fog=new THREE.Fog('#c3d5d8',65,145);this.static=new THREE.Group();this.scene.add(this.static);this.doors=new Map();this.jobs=new Map();this.horses=[];this.props=[];this.people=new Map();this.personShadow=contactShadow(.65,.48);this.scene.add(this.personShadow);
     this.scene.add(new THREE.HemisphereLight('#edf4fa','#96866a',2));const sun=new THREE.DirectionalLight('#ffe6b9',2.4);sun.position.set(-25,40,28);sun.castShadow=true;sun.shadow.mapSize.set(Math.min(1024,shadowSize),Math.min(1024,shadowSize));Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:1,far:110});sun.shadow.normalBias=.035;this.scene.add(sun);
     const strawMap=cropTexture(photos.room,.31,.86,.36,.13,5),stoneMap=materialTile(photos,2,8);
     const wood=new THREE.MeshStandardMaterial({map:tile(photos.wood,3),color:'#e0ceb0',roughness:.9}),oak=new THREE.MeshStandardMaterial({map:tile(photos.wood,1),color:'#a18b6d',roughness:.9}),stone=new THREE.MeshStandardMaterial({map:stoneMap,color:'#dbd2bb',roughness:1,bumpMap:stoneMap,bumpScale:.04}),metal=new THREE.MeshStandardMaterial({color:'#535f5c',metalness:.5,roughness:.45}),roof=new THREE.MeshStandardMaterial({color:'#6d7771',roughness:.85}),straw=new THREE.MeshStandardMaterial({map:strawMap,color:'#e3d5b2',roughness:1,bumpMap:strawMap,bumpScale:.035});
@@ -42,7 +44,7 @@ export class CentreScene{
       const door=new THREE.Group();door.userData.interactionId='door:'+b.id;door.position.set(b.side*3.3,0,b.z-1.2);this.scene.add(door);block(door,wood,0,.72,1.2,.14,1.44,2.3);block(door,oak,0,1.48,1.2,.18,.12,2.35);
       const bars=new THREE.InstancedMesh(post,metal,9),dummy=new THREE.Object3D();for(let n=0;n<9;n++){dummy.position.set(0,2.12,.16+n*.26);dummy.scale.set(.022,1.2,.022);dummy.updateMatrix();bars.setMatrixAt(n,dummy.matrix);}door.add(bars);this.doors.set(b.id,door);
       const board=new THREE.Mesh(new THREE.PlaneGeometry(1.95,.49),new THREE.MeshBasicMaterial({map:sign(b.name),side:THREE.DoubleSide,toneMapped:false}));board.userData.interactionId='door:'+b.id;board.position.set(b.side*3.16,1.1,b.z+2.1);board.rotation.y=-b.side*Math.PI/2;this.static.add(board);
-      if(b.pony){const row={noisette:0,nuage:1,etoile:2}[b.pony],pony=figure(cutout(rest,0,row*ch,cw,ch),1.95,2.85);pony.userData.interactionId='care:'+b.id;pony.position.set(b.x,.18,b.z);this.scene.add(pony);this.horses.push({mesh:pony,box:b,phase:i});
+      if(b.pony){const row={noisette:0,nuage:1,etoile:2}[b.pony],pony=figure(cutout(rest,0,row*ch,cw,ch),1.95,2.85);pony.userData.interactionId='care:'+b.id;pony.position.set(b.x,.18,b.z);this.scene.add(pony);const shadow=contactShadow(2.2,1.2);shadow.position.set(b.x,.19,b.z);this.scene.add(shadow);this.horses.push({mesh:pony,box:b,phase:i});
         const bucket=new THREE.Mesh(new THREE.CylinderGeometry(.36,.28,.43,16),metal);bucket.userData.interactionId='water:'+b.id;bucket.position.set(b.side*10.8,.46,b.z+2);this.static.add(bucket);const water=new THREE.Mesh(new THREE.CircleGeometry(.31,24),new THREE.MeshStandardMaterial({color:'#91b2ba',metalness:.3,roughness:.2}));water.rotation.x=-Math.PI/2;water.position.set(b.side*10.8,.67,b.z+2);this.scene.add(water);this.jobs.set('water:'+b.id,water);
         if(!photos.stableProps){const hay=block(this.static,straw,b.side*10.8,.47,b.z-2,1.1,.9,1.1);hay.rotation.y=.18;}
         const dirt=new THREE.Group();for(let n=0;n<7;n++){const pile=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),new THREE.MeshStandardMaterial({color:'#64513a',roughness:1}));pile.position.set(b.x+(n%3-.7)*.2,.17,b.z+2+Math.floor(n/3)*.15);dirt.add(pile);}this.scene.add(dirt);this.jobs.set('clean:'+b.id,dirt);
@@ -82,21 +84,21 @@ export class CentreScene{
     const hits=this.ray.intersectObjects(this.scene.children,true).filter(h=>h.object.visible&&h.object!==this.person&&h.object.material?.side!==THREE.BackSide);
     for(const hit of hits){let o=hit.object;while(o){if(o.userData.interactionId)return o.userData.interactionId;o=o.parent;}if(hit.distance> .1)return null;}return null;
   }
-  setCharacter(id){if(this.character===id)return;this.character=id;if(this.person)this.person.removeFromParent();const p=this.photos.characters[id],motion=p?.walkDirections||p?.paddockMotion||this.photos.demoPaddock,walk=actorTexture(motion);this.walk=walk;this.person=figure(walk.texture,id==='emmy'?1.12:1.32);this.person.material.dispose();this.person.material=horseMaterial(walk.texture,{rear:true});this.person.material.side=THREE.DoubleSide;this.scene.add(this.person);}
+  setCharacter(id){if(this.character===id)return;this.character=id;this.lastDirection=null;if(this.person)this.person.removeFromParent();const p=this.photos.characters[id],motion=p?.walkDirections||p?.paddockMotion||this.photos.demoPaddock,walk=actorTexture(motion);this.walk=walk;this.person=figure(walk.texture,id==='emmy'?1.12:1.32);this.person.material.dispose();this.person.material=horseMaterial(walk.texture,{rear:true});this.person.material.side=THREE.DoubleSide;this.scene.add(this.person);}
   renderState(state,character,camera,dt){
     this.setCharacter(character);const p=state.player,yaw=p.heading;
     const floor=p.z<3&&Math.abs(p.x)<12?(Math.abs(p.x)>3.7?.18:.08):p.x<-16&&p.z<-4&&p.z>-18?.06:.018;
-    this.person.position.set(p.x,floor,p.z);
+    this.person.position.set(p.x,floor,p.z);this.personShadow.position.set(p.x,floor+.012,p.z);
     const inside=BOXES.find(b=>Math.sign(p.x)===b.side&&Math.abs(p.x)>3.7&&Math.abs(p.x)<12&&Math.abs(p.z-b.z)<3.6),cameraYaw=yaw+(state.cameraYaw||0),desired=new THREE.Vector3(p.x+Math.sin(cameraYaw)*4.1,state.cameraHeight||2.2,p.z+Math.cos(cameraYaw)*4.1);
     if(inside){const angle=inside.side*1.05+(state.cameraYaw||0);desired.set(inside.x+Math.sin(angle)*5.3,state.cameraHeight||3.05,Math.max(inside.z-3.25,Math.min(inside.z+3.25,inside.z+Math.cos(angle)*5.3)));}
     if(p.z<2.8&&Math.abs(p.x)<12){desired.x=Math.max(-11.7,Math.min(11.7,desired.x));desired.z=Math.max(-24.8,Math.min(2.8,desired.z));}
     if(p.x<-16&&p.z<-4&&p.z>-18){desired.x=Math.max(-23.6,Math.min(-16.4,desired.x));desired.z=Math.max(-17.6,Math.min(-4.4,desired.z));}
-    if(!this.cameraReady){camera.position.copy(desired);this.cameraReady=true;}else camera.position.lerp(desired,1-Math.exp(-Math.max(dt,.001)*7));
+    if(!this.cameraReady){camera.position.copy(desired);this.cameraReady=true;}else camera.position.lerp(desired,1-Math.exp(-Math.max(dt,0)*7));
     this.cameraTarget.set(inside?p.x*.6+inside.x*.4:p.x,inside?1.05:1.3,inside?p.z*.6+inside.z*.4:p.z);camera.lookAt(this.cameraTarget);this.person.rotation.y=Math.atan2(camera.position.x-p.x,camera.position.z-p.z);
-    const relative=Math.atan2(Math.sin(yaw-this.person.rotation.y),Math.cos(yaw-this.person.rotation.y)),sector=Math.round(relative/(Math.PI/2));
-    const row=sector===0?1:Math.abs(sector)===2?0:sector===1?3:2,walking=p.speed>.06,pose=walking?detailPose(cyclePose(p.travel/.55,4,row*4)):{from:row*4,to:row*4,mix:0},texture=this.walk;
+    const view=characterView(yaw,this.person.rotation.y,character,this.lastDirection);this.lastDirection=view.direction;
+    const row=view.row,walking=p.speed>.06,pose=walking?detailPose(cyclePose((p.gaitTravel??p.travel)/.55,4,row*4)):{from:row*4,to:row*4,mix:0},texture=this.walk;
     this.person.material.map=texture.texture;texture.texture.offset.x=pose.from/texture.count;this.person.material.userData.poseMix.value=pose.mix;this.person.material.userData.poseDelta.value=(pose.to-pose.from)/texture.count;
-    this.person.scale.x=character==='emmy'&&row===2?-1:1;
+    this.person.scale.x=view.flip?-1:1;this.person.userData.facing=view.direction;
     this.person.scale.y=1+Math.sin(state.time*2)*.002;
     for(const [id,door]of this.doors){const target=state.doors[id]?(id==='sellerie'?1.42:BOXES.find(b=>b.id===id).side*1.42):0;door.rotation.y+=(target-door.rotation.y)*(1-Math.exp(-dt*8));}
     for(const [key,m]of this.jobs){if(key.startsWith('clean:'))m.visible=!state.jobs[key];else m.scale.setScalar(state.jobs[key]?1:.82);}

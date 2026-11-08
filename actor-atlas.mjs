@@ -21,13 +21,16 @@ export function actorAtlas(image,columns=4,rows=4,resolution=480){
   const value={frames,scratch,width,height,baseline,resolution};versions.set(key,value);return value;
 }
 export function drawActor(ctx,data,pose,x,y,height,{flip=false,breath=0,lean=0,other=null,weight=1}={}){
-  const c=data.scratch.getContext('2d');c.clearRect(0,0,data.width,data.height);c.globalCompositeOperation='lighter';
-  for(const [p,alpha] of [[pose,other?weight:1],[other,1-weight]]){
-    if(!p||alpha<=0)continue;
-    c.globalAlpha=(1-p.mix)*alpha;c.drawImage(data.frames[p.from],0,0);
-    if(p.mix){c.globalAlpha=p.mix*alpha;c.drawImage(data.frames[p.to],0,0);}
+  let source=data.frames[pose.from];
+  if(other||pose.mix){
+    const c=data.scratch.getContext('2d');c.clearRect(0,0,data.width,data.height);c.globalCompositeOperation='lighter';
+    for(const [p,alpha] of [[pose,other?weight:1],[other,1-weight]]){
+      if(!p||alpha<=0)continue;
+      c.globalAlpha=(1-p.mix)*alpha;c.drawImage(data.frames[p.from],0,0);
+      if(p.mix){c.globalAlpha=p.mix*alpha;c.drawImage(data.frames[p.to],0,0);}
+    }
+    c.globalAlpha=1;c.globalCompositeOperation='source-over';source=data.scratch;
   }
-  c.globalAlpha=1;c.globalCompositeOperation='source-over';
   const scale=height/data.resolution;ctx.save();ctx.translate(x,y);ctx.rotate(lean);ctx.scale(flip?-1:1,1+breath);
-  ctx.drawImage(data.scratch,-data.width*scale/2,-data.baseline*scale,data.width*scale,data.height*scale);ctx.restore();
+  ctx.drawImage(source,-data.width*scale/2,-data.baseline*scale,data.width*scale,data.height*scale);ctx.restore();
 }

@@ -1,8 +1,8 @@
 # Les Crins Magiques — Mon écurie interactive 🐴
 
-**[Télécharger la dernière édition familiale : liberté et aventures](https://raw.githubusercontent.com/carolinemoricemarie-tech/jeux/main/downloads/Mon-ecurie-liberte-et-aventures.zip)** — environ 36 Mo. Aucun compte GitHub nécessaire. Extraire tous les fichiers puis ouvrir **JOUER.html** dans Chrome ou Edge récent, avec le code communiqué en privé. Aucune installation.
+**[Télécharger la dernière édition familiale : soins vivants et grands parcours](https://raw.githubusercontent.com/carolinemoricemarie-tech/jeux/main/downloads/Mon-ecurie-soins-vivants-et-grands-parcours.zip)** — environ 40 Mo. Aucun compte GitHub nécessaire. Extraire tous les fichiers puis ouvrir **JOUER.html** dans Chrome ou Edge récent, avec le code communiqué en privé. Aucune installation.
 
-Personnages de l’écurie séparés des poneys avec de nouvelles images plus détaillées ; portes et objets du centre identifiés directement ; sortie vers la cour ; monte libre dans l’enclos ; commandes d’allure par pressions successives sur ↑ ; troncs et petits ponts en balade. Les neuf parcours de saut et les règles adaptées à Emmy sont conservés.
+Profils gauche/droite corrigés selon la caméra ; marche arrière et retours de soins dans le bon sens ; nourrissage avec tête, lèvres et mâchoire animées, carotte et poignée de foin ; accès permanent à la cour, même en pause et en plein écran ; trois parcours difficiles redessinés avec de grandes courbes et des portes larges. Les hauteurs et les règles adaptées à Emmy sont conservées.
 
 
 Un jeu d’équitation en français, avec une écurie interactive, un enclos pour jouer et travailler en longe, et **neuf parcours de dix obstacles**. Emmy joue sans élimination et bénéficie du guidage sur les trois parcours débutants. Louane conserve la limite de trois erreurs. Trois balades à diriger soi-même complètent les activités : forêt, mer et campagne. Le centre équestre se visite à pied, avec six boxes ouvrants et une sellerie.
@@ -23,9 +23,13 @@ Le dossier est créé dans `dist/reviewable-family`, ignoré par Git. `scripts/a
 
 ## Le rendu visuel
 
+Le nourrissage dispose de séquences séparées pour chaque poney et chaque enfant : approche, main plate, tête qui descend, prise de nourriture, mastication, retrait et retour. Le foin et la carotte sont des objets photographiques individuels. La marche utilise les vues avant/arrière/profils adaptées à la caméra, sans intervertir les profils. Des ombres de contact relient les pieds et sabots au sol.
+
 Le cheval et la cavalière utilisent des séquences photoréalistes générées : huit poses de galop, huit poses de saut et des séquences de soins et d’équipement. Les arbres sont des images détourées, l’herbe et le bois ont des textures détaillées, et le ciel provient d’un panorama de campagne généré. Ces éléments sont intégrés au terrain et aux obstacles en 3D. Les personnages sont affichés sur des plans qui suivent la caméra ; le décor du centre et les terrains se parcourent en 3D. Le dossier autonome contient toutes les images, sans appel à un service d’images pendant le jeu.
 
 ## Les règles
+
+Les trois tracés difficiles suivent de grandes boucles sans croisement. Les règles de saut et les hauteurs élevées sont conservées ; les derniers obstacles sont orientés selon leur approche réelle, et les points de guidage rejoignent la prochaine porte depuis la position du poney.
 
 Chaque thème contient exactement **10 obstacles numérotés**, à franchir dans l’ordre et dans le sens indiqué par le tracé. Un obstacle franchi assez haut, entre ses deux montants, est réussi et rapporte trois étoiles.
 
@@ -69,7 +73,7 @@ Sur téléphone et tablette, maintenir ← et → pour tourner. En balade et en 
 | Difficile | Le défi des étoiles | 115–130 cm |
 | Difficile | Le grand prix arc-en-ciel | 125–140 cm |
 
-Chaque circuit a son propre tracé. Les portes se resserrent de 4,5 à 3,5 mètres avec le niveau. Les neuf parcours peuvent être consultés avant d’équiper le poney. Le départ attend **3, 2, 1, Partez !** ; le poney reste immobile pendant le décompte et la pause conserve le temps restant.
+Chaque circuit a son propre tracé. Les trois parcours difficiles ont désormais des portes de 4,6 mètres, des approches longues et des virages ouverts : leur difficulté porte sur les hauteurs, conservées entre 1,10 et 1,40 m. Les tracés débutants et intermédiaires conservent leur géométrie. Les neuf parcours peuvent être consultés avant d’équiper le poney. Le départ attend **3, 2, 1, Partez !** ; le poney reste immobile pendant le décompte et la pause conserve le temps restant.
 
 Une arche et une ligne à damier matérialisent l’arrivée. Après le dernier saut réussi, le poney termine sa réception puis passe sous l’arche. Le feu d’artifice dessine sept bandes en arc-en-ciel ; le résultat apparaît après les premières fusées. Les applaudissements et une petite fanfare accompagnent uniquement la victoire. Avec la préférence système « réduire les animations », l’arc-en-ciel reste fixe.
 
@@ -85,7 +89,7 @@ Le poney y porte un licol, sans selle ni cavalière sur son dos. La cavalière s
 - **En longe** : rejoindre le centre, choisir le pas, le trot, le galop ou l’arrêt, puis changer de main. La longe visible relie la main de la cavalière au licol. Trois tours renforcent la complicité et consomment un peu d’énergie, une seule fois par visite.
 - **Au galop** est disponible en liberté comme en longe. Le poney peut courir librement autour de l’enclos.
 - **Monter · mouvement libre** ouvre l’enclos en selle : aucune trajectoire imposée, ← et → pour diriger, ↑ pour choisir pas, trot puis galop, ↓ pour ralentir. **Arrêt**, **Descendre du poney** et **Rentrer au centre** restent accessibles. Le matériel est préparé pour cette activité.
-- **Sortir vers la cour** reste visible en liberté, en longe et en pause ; il rejoint directement le centre en 3D. Le bouton de sortie sur le portail mène au même endroit.
+- **Sortir vers la cour**, **Portail · La cour →** et le raccourci permanent **La cour** dans la barre du jeu rejoignent le milieu de la cour. Ils restent utilisables à pied, en longe, en selle, en pause et en plein écran. Le retour annule les anciennes cibles de déplacement et permet de marcher immédiatement dans la cour.
 - **Pause** ou Échap fige les déplacements. Le passage dans l’enclos retire le matériel ; il faut le reposer avant un parcours.
 
 Le décor, le poney et les personnages utilisent des images photoréalistes. Le déplacement et la profondeur sont calculés dans `paddock.mjs` et `paddock-room.mjs`, avec seize poses du poney vues de quatre côtés et huit poses de marche et de longe pour chaque personnage.
@@ -181,7 +185,7 @@ Les versions de Three.js et d’esbuild sont verrouillées. La licence MIT de Th
 
 ## Validation
 
-74 tests couvrent le pilotage, les neuf tracés et leurs trois niveaux, le décompte et sa pause, les sauts, la défaite à trois erreurs, les soins, le matériel, la continuité des poses, la sauvegarde du personnage, la marche dans l’enclos, le ballon, la longe, l’arrêt et le changement de main, les changements d’allure des trois balades, la monte libre dans l’enclos, les troncs franchissables sans élimination, le tablier du pont, la baignade, les murs, les six portes et les trajets entre les boxes, la sellerie et la cour.
+84 tests couvrent le pilotage, les neuf tracés et leurs trois niveaux, le décompte et sa pause, les sauts, la défaite à trois erreurs, les soins, le matériel, la continuité des poses, la sauvegarde du personnage, la marche dans l’enclos, le ballon, la longe, l’arrêt et le changement de main, les changements d’allure des trois balades, la monte libre dans l’enclos, les troncs franchissables sans élimination, le tablier du pont, la baignade, les murs, les six portes et les trajets entre les boxes, la sellerie et la cour.
 
 Vérification navigateur : clics sur les objets photographiés de l’écurie, cavalière visible pendant le foin, la carotte et le brossage, équipement dans l’ordre, conservation du matériel après rechargement, huit poses du saut visibles, saut réussi, pause, défaite au troisième raté, gestes tactiles dans la scène, plein écran et absence de requêtes externes.
 

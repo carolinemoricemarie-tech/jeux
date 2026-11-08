@@ -2,7 +2,11 @@ export const BOXES=Array.from({length:6},(_,i)=>({id:'box'+i,side:i%2?-1:1,x:i%2
 export const CENTRE_BOUNDS={minX:-29,maxX:29,minZ:-30,maxZ:30};
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 export function createCentre({age=8,progress={}}={}){
-  return {status:'playing',time:0,player:{x:0,z:13,heading:0,speed:0,travel:0},target:null,path:[],pending:null,walkSpeed:age===5?1.8:2.1,doors:{...Object.fromEntries(BOXES.map(b=>[b.id,progress.doors?.[b.id]===true])),sellerie:progress.doors?.sellerie===true},jobs:{...progress.jobs},action:null,actionUntil:0};
+  return {status:'playing',time:0,player:{x:0,z:13,heading:0,speed:0,travel:0,gaitTravel:0},target:null,path:[],pending:null,walkSpeed:age===5?1.8:2.1,doors:{...Object.fromEntries(BOXES.map(b=>[b.id,progress.doors?.[b.id]===true])),sellerie:progress.doors?.sellerie===true},jobs:{...progress.jobs},action:null,actionUntil:0};
+}
+export function placeInCourtyard(s){
+  s.status='playing';s.target=null;s.path=[];s.pending=null;s.action=null;s.actionUntil=s.time;s.cameraYaw=0;s.cameraHeight=undefined;
+  Object.assign(s.player,{x:0,z:14,heading:0,speed:0});return s;
 }
 export function centreBlocked(s,x,z){
   if(x<CENTRE_BOUNDS.minX||x>CENTRE_BOUNDS.maxX||z<CENTRE_BOUNDS.minZ||z>CENTRE_BOUNDS.maxZ)return true;
@@ -91,15 +95,16 @@ export function advanceCentre(s,dt,input={}){
   const turn=(input.left?1:0)-(input.right?1:0),move=(input.up?1:0)-(input.down? .5:0);
   if(turn||move){s.target=null;s.path=[];s.pending=null;}
   p.heading+=turn*1.75*dt;let direction=move,targetSpeed=Math.abs(move)*s.walkSpeed;
+  while(s.target&&Math.hypot(s.target.x-p.x,s.target.z-p.z)<.2){s.target=s.path.shift()||null;
+    if(!s.target&&s.pending){const item=s.pending;s.pending=null;events.push(...interactCentre(s,{...item,distance:Math.hypot(p.x-item.x,p.z-item.z)}));}}
   if(s.target){const dx=s.target.x-p.x,dz=s.target.z-p.z,d=Math.hypot(dx,dz);
-    if(d<.2){s.target=s.path.shift()||null;if(!s.target&&s.pending){events.push(...interactCentre(s,{...s.pending,distance:0}));s.pending=null;}}
-    else{const angle=Math.atan2(-dx,-dz),delta=Math.atan2(Math.sin(angle-p.heading),Math.cos(angle-p.heading));p.heading+=delta*(1-Math.exp(-dt*9));direction=1;targetSpeed=Math.min(s.walkSpeed,d/dt);}
+    const angle=Math.atan2(-dx,-dz),delta=Math.atan2(Math.sin(angle-p.heading),Math.cos(angle-p.heading));p.heading+=delta*(1-Math.exp(-dt*9));direction=1;targetSpeed=Math.min(s.walkSpeed,d/dt);
   }
   if(s.actionUntil>s.time)targetSpeed=0;
   const rate=targetSpeed<p.speed?10:7;p.speed+=(targetSpeed-p.speed)*(1-Math.exp(-dt*rate));
   const sign=direction<0?-1:1,dx=-Math.sin(p.heading)*p.speed*dt*sign,dz=-Math.cos(p.heading)*p.speed*dt*sign,oldX=p.x,oldZ=p.z;
   if(!centreBlocked(s,p.x+dx,p.z))p.x+=dx;if(!centreBlocked(s,p.x,p.z+dz))p.z+=dz;
-  const distance=Math.hypot(p.x-oldX,p.z-oldZ);p.travel+=distance;
+  const distance=Math.hypot(p.x-oldX,p.z-oldZ);p.travel+=distance;p.gaitTravel=(p.gaitTravel||0)+distance*sign;
   if(distance<1e-6&&!s.target)p.speed=0;
   return events;
 }

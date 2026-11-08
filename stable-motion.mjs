@@ -1,6 +1,6 @@
 // Milliseconds: let each small gesture finish instead of rapidly cycling poses.
 export const ACTION_DURATION = {
-  hay: 5200, carrot: 4600, brush: 6800, pet: 4800, rest: 5000,
+  hay: 12000, carrot: 11000, brush: 6800, pet: 4800, rest: 5000,
   pad: 5500, saddle: 6000, bridle: 5600
 };
 const clamp = n => Math.max(0, Math.min(1, n));

@@ -4,9 +4,12 @@ import {PONIES} from './ponies.mjs';
 import {actorAtlas,drawActor} from './actor-atlas.mjs';
 import {walkingPose,clamp} from './animation.mjs';
 import {cyclePose,detailPose} from './animation.mjs';
+import {feedingAnimation} from './care-animation.mjs';
+import {directionView} from './character-view.mjs';
 const CLIPS={hay:'careHay',carrot:'careCarrot',brush:'careBrush',pet:'carePet',rest:'carePet',pad:'equipPad',saddle:'equipSaddle',bridle:'equipBridle'};
 const DESCRIPTIONS={hay:'donne du foin au poney',carrot:'donne une carotte au poney',brush:'brosse le poney',pet:'caresse le poney',rest:'se repose avec son poney',pad:'installe le tapis',saddle:'installe la selle sur le tapis',bridle:'met le filet au poney'};
 const surface=()=>{const c=document.createElement('canvas');c.width=1200;c.height=800;return c;};
+function contactShadow(c,x,y,width,opacity=.22){c.save();c.translate(x,y);c.scale(width,7);const g=c.createRadialGradient(0,0,.05,0,0,1);g.addColorStop(0,'rgba(38,28,15,'+opacity+')');g.addColorStop(1,'rgba(38,28,15,0)');c.fillStyle=g;c.beginPath();c.arc(0,0,1,0,Math.PI*2);c.fill();c.restore();}
 export class StableRoom {
   constructor(root,photos,{reducedMotion=false}={}){
     this.root=root;this.allPhotos=photos;this.photos=photos;this.reducedMotion=reducedMotion;
@@ -75,11 +78,13 @@ export class StableRoom {
   }
   drawRest(pony,effect,now,progress){
     const c=this.ctx,id=PONIES[this.ponyId].row,index=progress*3,from=Math.floor(index),to=Math.min(3,from+1),mix=ease(index-from);
-    c.clearRect(0,0,1200,800);drawActor(c,this.restAtlas,{from:id*4+from,to:id*4+to,mix},680,704,530,{breath:this.reducedMotion?0:Math.sin(now*.0016)*.002});
+    c.clearRect(0,0,1200,800);contactShadow(c,680,709,progress>.6?200:125,.28);contactShadow(c,435,707,30);drawActor(c,this.restAtlas,{from:id*4+from,to:id*4+to,mix},680,704,530,{breath:this.reducedMotion?0:Math.sin(now*.0016)*.002});
     const sharp=this.allPhotos.characters[this.character]?.stableActions,image=sharp||this.allPhotos.characters[this.character]?.paddockMotion;
     if(image){const child=sharp?null:actorAtlas(image),approach=effect?.action==='rest'?clamp((now-effect.started)/900):1,x=540-105*ease(approach);
       const pose=approach<1&&!this.reducedMotion?walkingPose((540-x)/135,this.character==='emmy'?5:8):this.reducedMotion?{from:8,to:8,mix:0}:idlePose(now/1000);
-      drawActor(c,sharp?actorAtlas(image,2,2,720):child,sharp?{from:0,to:0,mix:0}:pose,x,704,this.character==='emmy'?340:385,{flip:!sharp&&approach<1,breath:this.reducedMotion?0:Math.sin(now*.002)*.0015});
+      const directions=this.allPhotos.characters[this.character]?.walkDirections,view=directionView('left',this.character);
+      if(approach<1&&directions&&!this.reducedMotion)drawActor(c,actorAtlas(directions),detailPose(cyclePose((540-x)/120*4,4,view.row*4)),x,704,this.character==='emmy'?340:385,{flip:view.flip});
+      else drawActor(c,sharp?actorAtlas(image,2,2,720):child,sharp?{from:0,to:0,mix:0}:pose,x,704,this.character==='emmy'?340:385,{flip:!sharp&&approach<1,breath:this.reducedMotion?0:Math.sin(now*.002)*.0015});
     }
     this.canvas.dataset.clip=progress>=.99?'lying':progress<=.01?'standing':'lying-down';this.canvas.dataset.frame=String(from);this.canvas.dataset.ponyId=this.ponyId;
     this.canvas.setAttribute('aria-label',PONIES[this.ponyId].name+(progress>=.99?' est couché et se repose.':' se couche ou se relève doucement.'));
@@ -89,14 +94,31 @@ export class StableRoom {
     const row=PONIES[this.ponyId].row,equipment=pony.tack?.bridle?3:pony.tack?.saddle?2:pony.tack?.pad?1:0;
     const progress=active?Math.min(ease(t/.25),ease((1-t)/.2)):0,target=action==='hay'||action==='carrot'||action==='pet'?745:595,x=450+(target-450)*progress;
     const gesture=active&&t>.23&&t<.82,index=gesture?(action==='brush'?2:['pad','saddle','bridle'].includes(action)?3:1):0;
-    c.clearRect(0,0,1200,800);
+    c.clearRect(0,0,1200,800);contactShadow(c,690,710,135,.28);contactShadow(c,x,707,31);
     drawActor(c,actorAtlas(this.allPhotos.ponyCareTack,4,3,720),{from:row*4+equipment,to:row*4+equipment,mix:0},690,704,530,{breath:this.reducedMotion?0:Math.sin(now*.0017)*.0015});
     const walking=active&&!gesture&&progress>.02&&progress<.98,motion=this.allPhotos.characters[this.character]?.paddockMotion;
-    if(walking&&motion&&!this.reducedMotion)drawActor(c,actorAtlas(motion),detailPose(walkingPose((x-450)/135,this.character==='emmy'?5:8)),x,704,this.character==='emmy'?350:395,{flip:t>.8});
+    if(walking&&this.allPhotos.characters[this.character]?.walkDirections&&!this.reducedMotion){const view=directionView(t>.8?'left':'right',this.character),travel=(target-450)*(t<.25?ease(t/.25):1+ease((t-.8)/.2));drawActor(c,actorAtlas(this.allPhotos.characters[this.character].walkDirections),detailPose(cyclePose(travel/120*4,4,view.row*4)),x,704,this.character==='emmy'?350:395,{flip:view.flip});}
+    else if(walking&&motion&&!this.reducedMotion)drawActor(c,actorAtlas(motion),detailPose(walkingPose((target-450)*(t<.25?progress:2-progress)/135,this.character==='emmy'?5:8)),x,704,this.character==='emmy'?350:395,{flip:t>.8});
     else drawActor(c,actorAtlas(image,2,2,720),{from:index,to:index,mix:0},x,704,this.character==='emmy'?350:395,{breath:this.reducedMotion?0:Math.sin(now*.0018)*.0015,lean:gesture&&action==='brush'&&!this.reducedMotion?Math.sin(now*.006)*.006:0});
     if(gesture&&['hay','carrot'].includes(action)&&this.allPhotos.stableProps){const im=this.allPhotos.stableProps,w=im.width/4,h=im.height/2,n=action==='hay'?0:4;c.drawImage(im,n%4*w,Math.floor(n/4)*h,w,h,x+65,action==='hay'?425:440,75,55);}
     this.canvas.dataset.clip=active?CLIPS[action]:equipment===3?'equipBridle':equipment===2?'equipSaddle':equipment===1?'equipPad':'careIdle';this.canvas.dataset.frame=String(index);this.canvas.dataset.nativeCoat=PONIES[this.ponyId].kind;this.canvas.dataset.sharpCharacter='true';
     this.canvas.setAttribute('aria-label',(this.name||'La cavalière')+' et '+PONIES[this.ponyId].name+(active?' : '+DESCRIPTIONS[action]:', dans leur box.'));
+  }
+  drawFeeding(pony,effect,now){
+    const c=this.ctx,t=clamp((now-effect.started)/(effect.until-effect.started)),motion=feedingAnimation(t,(now-effect.started)/1000),images=this.allPhotos.characters[this.character],kind=PONIES[this.ponyId].kind;
+    const horse=this.allPhotos[kind==='white'?'feedWhite':kind==='unicorn'?'feedUnicorn':'feedBay'],height=this.character==='emmy'?350:395,target=this.character==='emmy'?800:795,x=450+(target-450)*motion.out;
+    c.clearRect(0,0,1200,800);contactShadow(c,690,710,135,.28);contactShadow(c,x,707,31);
+    const transition=Math.min(ease(t/.045),ease((1-t)/.045)),row=PONIES[this.ponyId].row;
+    if(transition<1){c.globalAlpha=1-transition;drawActor(c,actorAtlas(this.allPhotos.ponyCareTack,4,3,720),{from:row*4,to:row*4,mix:0},690,704,530);}c.globalCompositeOperation='lighter';c.globalAlpha=transition;
+    drawActor(c,actorAtlas(horse,2,3,720),this.reducedMotion?{from:3,to:3,mix:0}:motion.horsePose,690,704,530,{breath:this.reducedMotion?0:Math.sin(now*.0017)*.001});c.globalAlpha=1;c.globalCompositeOperation='source-over';
+    if(motion.walking&&!this.reducedMotion&&images.walkDirections){const view=directionView(motion.flip?'left':'right',this.character),travel=(target-450)*motion.travel;
+      drawActor(c,actorAtlas(images.walkDirections),detailPose(cyclePose(travel/120*4,4,view.row*4)),x,704,height,{flip:view.flip});
+    }else{const p=this.character==='louane'?{...motion.childPose,from:motion.childPose.from===2?1:motion.childPose.from,to:motion.childPose.to===2?1:motion.childPose.to}:motion.childPose;drawActor(c,actorAtlas(images.feedActions,2,2,720),this.reducedMotion?{from:1,to:1,mix:0}:p,x,704,height,{breath:this.reducedMotion?0:Math.sin(now*.0018)*.001});}
+    if(motion.handReach>.2&&motion.food>.02){const im=this.allPhotos.feedingProps,w=im.width/2,h=im.height/2,index=(effect.action==='carrot'?1:0)+(motion.food<.5?2:0),handY=this.character==='emmy'?445:456;
+      c.globalAlpha=Math.min(1,motion.food*5)*motion.handReach;c.drawImage(im,index%2*w,Math.floor(index/2)*h,w,h,x+50,handY-23,52,35);c.globalAlpha=1;
+    }
+    this.canvas.dataset.clip=CLIPS[effect.action];this.canvas.dataset.frame=String(motion.childPose.from);this.canvas.dataset.mouthFrame=String(motion.horsePose.from);this.canvas.dataset.feedingStage=motion.stage;this.canvas.dataset.actorFacing=motion.walking?(motion.flip?'left':'right'):'right';this.canvas.dataset.sharpCharacter='true';this.canvas.dataset.nativeCoat=kind;
+    this.canvas.setAttribute('aria-label',(this.name||'La cavalière')+' nourrit '+PONIES[this.ponyId].name+' : le poney baisse la tête et mâche.');
   }
   render(pony,effect,now){
     if(now-this.lastStamp<1000/60-1)return;this.lastStamp=now;
@@ -107,6 +129,8 @@ export class StableRoom {
     if(this.wasResting){this.wasResting=false;this.wakingAt=now;}
     if(this.wakingAt!==null&&this.wakingAt!==undefined&&now-this.wakingAt<1400){this.drawRest(pony,null,now,1-ease((now-this.wakingAt)/1400));return;}
     const sharp=this.allPhotos.characters[this.character]?.stableActions;
+    if(active&&['hay','carrot'].includes(effect.action)&&this.allPhotos.characters[this.character]?.feedActions&&this.allPhotos.feedBay&&this.allPhotos.feedingProps){this.drawFeeding(pony,effect,now);return;}
+    delete this.canvas.dataset.feedingStage;delete this.canvas.dataset.mouthFrame;
     if(sharp&&this.allPhotos.ponyCareTack){this.drawSharp(pony,effect,now,sharp);return;}
     const native=PONIES[this.ponyId].kind==='white'?this.photos.characters?.[this.character]?.whiteCare:PONIES[this.ponyId].kind==='unicorn'?this.photos.characters?.[this.character]?.unicornCare:null;
     if(native){this.drawNative(pony,effect,now,native);return;}

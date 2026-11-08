@@ -20,6 +20,7 @@ export const PHOTO_URLS = {
   demoPaddock: './assets/demo-paddock.webp',
   playBall: './assets/play-ball.webp',
   ponyCareTack:'./assets/pony-care-tack.webp',
+  feedBay:'./assets/pony-feed-bay.webp',feedWhite:'./assets/pony-feed-white.webp',feedUnicorn:'./assets/pony-feed-unicorn.webp',feedingProps:'./assets/feeding-props.webp',
   oceanWater:'./assets/ocean-water.webp',stableProps:'./assets/stable-props.webp',whiteFree:'./assets/white-free.webp',worldTextures:'./assets/world-textures.webp',
   ponyRest:'./assets/pony-rest.webp',unicornFree:'./assets/unicorn-free.webp',ponyGallop:'./assets/pony-gallop.webp',
   stableYard:'./assets/stable-yard.webp',stableCorridor:'./assets/stable-corridor.webp',seaSky:'./assets/sea-sky.webp'

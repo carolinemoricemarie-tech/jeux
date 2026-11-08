@@ -48,3 +48,8 @@ body.in-centre #game{visibility:visible}
 @media(max-width:700px){.centre-hotspot{font-size:7px!important;padding:5px 6px!important;max-width:130px}.paddock-actions{max-width:94%}.paddock-top-right #paddock-exit{max-width:115px;font-size:8px}}
 
 .centre-top-actions{display:flex;gap:6px}.centre-map[hidden]{display:none}.centre-map:not([hidden]){z-index:8;box-shadow:0 6px 20px #21372535}
+
+.courtyard-shortcut{white-space:nowrap!important;background:#eaf0df!important;color:#36573e!important;border:1px solid #b7c9a7!important;font-size:10px!important;padding:7px 10px!important;flex:none}.paddock-ui #paddock-courtyard{position:absolute;right:3%;top:48%;z-index:20;max-width:170px;padding:12px 16px;background:#426c4d;color:#fffdf1;border:2px solid #f9efce;box-shadow:0 4px 15px #2136234a;touch-action:manipulation}.paddock-ui #paddock-courtyard:hover{background:#315a3c;outline:2px solid #efd88c}.paddock-top-right #paddock-exit{touch-action:manipulation}
+@media(max-width:700px){#box-tag{display:none!important}.courtyard-shortcut{font-size:8px!important;padding:6px!important}.paddock-ui #paddock-courtyard{right:2%;top:46%;max-width:115px;font-size:8px;padding:9px}}
+
+.stable-room[data-rider] .horse-contact-shadow{display:none}

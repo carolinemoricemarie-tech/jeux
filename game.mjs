@@ -9,7 +9,7 @@ import { createGame, jump, advance, COURSES, LEVELS, BOUNDS, PACES, ridingRules,
 import {PONIES} from './ponies.mjs';
 import {TRAILS,createTrail,createFreeRide} from './trails.mjs';
 import {setRideGait,changeRideGait,GAIT_LABELS} from './riding.mjs';
-import {createCentre,advanceCentre,nearestCentreInteraction,interactCentre,walkCentreTo,activateCentreObject,BOXES} from './centre.mjs';
+import {createCentre,advanceCentre,nearestCentreInteraction,interactCentre,walkCentreTo,activateCentreObject,placeInCourtyard,BOXES} from './centre.mjs';
 import { SAVE_KEY, NEEDS, restoreStable, care, mood, rideReadiness, settleRide, tackReadiness, fitTack, removeTack, prepareForRide, TACK_ORDER } from './stable.mjs';
 
 const $ = id => document.getElementById(id);
@@ -32,7 +32,7 @@ document.querySelector('.page').inert=true;
 for(const [level,label] of Object.entries(LEVELS)){
   const section=document.createElement('section');section.className='course-level';section.dataset.level=level;
   const title=document.createElement('h3');title.textContent=label;section.append(title);
-  const hint=document.createElement('p');hint.textContent=level==='beginner'?'De grandes portes et de petites barres pour apprendre.':level==='intermediate'?'Des virages variés et des barres qui montent doucement.':'Des portes plus étroites, de hauts sauts et des tracés techniques.';section.append(hint);
+  const hint=document.createElement('p');hint.textContent=level==='beginner'?'De grandes portes et de petites barres pour apprendre.':level==='intermediate'?'Des virages variés et des barres qui montent doucement.':'Des portes larges, de grandes courbes et des obstacles plus hauts.';section.append(hint);
   const options=document.createElement('div');options.className='course-options';options.setAttribute('role','group');options.setAttribute('aria-label','Parcours '+label);
   for(const [id,config] of Object.entries(COURSES).filter(([,c])=>c.level===level)){
     const b=document.createElement('button');b.dataset.course=id;b.classList.toggle('active',id===course);b.setAttribute('aria-pressed',id===course);
@@ -214,11 +214,12 @@ function openTrailMenu(){
   if(isBusy()||!world)return;if(game&&!game.settled)settleRide(stable,chosen,game);game=createTrail(trail);game.status='preview';activity='trail';resetCelebration();setView('trail');show(null);lockChoices(false);$('trail-panel').hidden=true;$('travel-toolbar').hidden=true;$('ride-hud').hidden=true;$('navigation').hidden=true;$('ride-progress').hidden=true;$('trail-menu').hidden=false;$('place-name').textContent='LES TROIS BALADES';save();
 }
 function openCentre(from='yard'){
-  if(!world||isBusy())return;goHome();centre ||= createCentre({age:CHARACTERS[stable.character].age,progress:stable.centre});centre.status='playing';centre.walkSpeed=stable.character==='emmy'?1.8:2.1;
+  if(!world)return;goHome();centre ||= createCentre({age:CHARACTERS[stable.character].age,progress:stable.centre});centre.status='playing';centre.walkSpeed=stable.character==='emmy'?1.8:2.1;
   centre.target=null;centre.path=[];centre.pending=null;centre.pony=chosen;
-  if(from==='paddock'){Object.assign(centre.player,{x:23,z:15,heading:Math.PI/2,speed:0});centre.target=null;centre.path=[];}
+  if(from==='paddock'||from==='yard')placeInCourtyard(centre);
   if(from==='box'){const b=BOXES.find(b=>b.pony===chosen);if(b){centre.doors[b.id]=true;Object.assign(centre.player,{x:b.side*5.7,z:b.z+1.6,heading:b.side*Math.PI/2,speed:0});}}
   setView('centre');show(null);$('centre-map').hidden=true;$('centre-map-toggle').setAttribute('aria-expanded','false');lastCentreUI='';$('place-name').textContent='LE CENTRE ÉQUESTRE';$('centre-pause').textContent='Pause';audio.unlock();updateCentreUI();save();
+  if(from!=='box'){$('centre-location').textContent='La cour du centre équestre';$('announcer').textContent='Tu es dans la cour. Tu peux marcher vers les boxes, la sellerie ou l’enclos.';}
   if(matchMedia('(max-width:700px)').matches)$('scene').scrollIntoView({block:'center'});
 }
 function centreEvents(events){
@@ -376,6 +377,7 @@ for(const b of document.querySelectorAll('[data-trail]'))b.addEventListener('cli
 $('trails-tab').addEventListener('click',openTrailMenu);
 $('change-trail').addEventListener('click',openTrailMenu);$('trail-to-centre').addEventListener('click',()=>openCentre(game?.activity==='paddock'?'paddock':'yard'));
 $('centre-tab').addEventListener('click',()=>openCentre());$('leave-box').addEventListener('click',()=>openCentre('box'));
+$('courtyard-shortcut').addEventListener('click',()=>openCentre('yard'));
 $('centre-map-toggle').addEventListener('click',()=>{$('centre-map').hidden=!$('centre-map').hidden;$('centre-map-toggle').setAttribute('aria-expanded',!$('centre-map').hidden);});
 $('centre-to-paddock').addEventListener('click',()=>$('paddock-tab').click());
 $('centre-interact').addEventListener('click',()=>{if(centre)centreEvents(interactCentre(centre));lastCentreUI='';updateCentreUI();});
@@ -435,7 +437,7 @@ window.addEventListener('keydown',event=>{
   if(view==='paddock'){
     if(arrowKeys[event.code]){event.preventDefault();heldKeys.add(arrowKeys[event.code]);}
     if(event.code==='Space'&&!event.repeat){event.preventDefault();$('paddock-room').querySelector('[data-paddock-command="call"]').click();}
-    if(event.code==='Escape'){event.preventDefault();$('paddock-pause').click();}
+    if(event.code==='Escape'&&!event.repeat){event.preventDefault();$('paddock-pause').click();}
     return;
   }
   if(view==='centre'){
@@ -451,7 +453,7 @@ window.addEventListener('keydown',event=>{
     }
     if(event.code==='KeyR'&&!event.repeat&&game.status==='playing'&&resetToTarget(game)){event.preventDefault();notify('Te voilà bien placée pour le prochain saut !');}
   }
-  if(event.code==='Escape'&&game&&['playing','countdown','paused'].includes(game.status)){event.preventDefault();pause();}
+  if(event.code==='Escape'&&!event.repeat&&game&&['playing','countdown','paused'].includes(game.status)){event.preventDefault();pause();}
 });
 window.addEventListener('keyup',event=>{if(arrowKeys[event.code])heldKeys.delete(arrowKeys[event.code]);});
 window.addEventListener('blur',()=>{releaseInputs();if(game&&['playing','countdown'].includes(game.status))pause();if(view==='paddock'&&paddock.state.status==='playing'){$('paddock-pause').click();}if(view==='centre'&&centre?.status==='playing')$('centre-pause').click();});

@@ -355,8 +355,8 @@ export class PonyWorld {
     }
     this.guideGroup.visible=!!gate;
     if(gate){
-      const before=state.obstacles[state.next-1]||{x:0,z:40};
-      this.guideDots.forEach((dot,i)=>{const t=(i+1)/31;dot.position.set(before.x+(gate.x-before.x)*t,.03,before.z+(gate.z-before.z)*t);});
+      const localForward=Math.sin(gate.yaw)*(state.x-gate.x)+Math.cos(gate.yaw)*(state.z-gate.z),approach={x:gate.x+Math.sin(gate.yaw)*10,z:gate.z+Math.cos(gate.yaw)*10};
+      this.guideDots.forEach((dot,i)=>{const t=(i+1)/31,a=localForward>11&&t<.5?state:localForward>11?approach:state,b=localForward>11&&t<.5?approach:gate,q=localForward>11?(t<.5?t*2:(t-.5)*2):t;dot.position.set(a.x+(b.x-a.x)*q,.03,a.z+(b.z-a.z)*q);});
     }
     const a=this.dustGeo.attributes.position;
     for(let i=0;i<a.count;i++){
@@ -369,7 +369,7 @@ export class PonyWorld {
     const now=performance.now();if(this.software&&now-this.lastRenderAt<1000/30-1)return null;this.lastRenderAt=now;
     if(!this.centreScene)this.centreScene=new CentreScene(this.photos,{shadowSize:this.shadowSize});
     if(this.sceneName!=='centre'){this.sceneName='centre';this.centreScene.cameraReady=false;this.resize();this.renderer.shadowMap.needsUpdate=true;}
-    this.camera.fov=58;this.camera.updateProjectionMatrix();const location=this.centreScene.renderState(state,character,this.camera,dt);this.renderer.render(this.centreScene.scene,this.camera);this.canvas.dataset.centreX=state.player.x.toFixed(2);this.canvas.dataset.centreZ=state.player.z.toFixed(2);this.canvas.dataset.centreHeading=String(state.player.heading);return location;
+    this.camera.fov=58;this.camera.updateProjectionMatrix();const location=this.centreScene.renderState(state,character,this.camera,dt);this.renderer.render(this.centreScene.scene,this.camera);this.canvas.dataset.centreX=state.player.x.toFixed(2);this.canvas.dataset.centreZ=state.player.z.toFixed(2);this.canvas.dataset.centreHeading=String(state.player.heading);this.canvas.dataset.actorFacing=this.centreScene.person.userData.facing;this.canvas.dataset.actorFlip=String(this.centreScene.person.scale.x<0);return location;
   }
   centreGroundPoint(x,y){return this.centreScene?.groundPoint(x,y,this.canvas.getBoundingClientRect(),this.camera);}
   centrePickObject(x,y){return this.centreScene?.pickObject(x,y,this.canvas.getBoundingClientRect(),this.camera);}

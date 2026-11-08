@@ -4,6 +4,7 @@ import { actorAtlas,drawActor } from './actor-atlas.mjs';
 import { walkingPose,idlePose,cyclePose,damp,facingDirection,detailPose,clamp } from './animation.mjs';
 import { PONIES } from './ponies.mjs';
 import { ZONES,projectEstate,visitPortal } from './estate.mjs';
+import {flatCharacterView} from './character-view.mjs';
 function atlas(image,columns,rows){
   const w=Math.floor(image.width/columns),h=Math.floor(image.height/rows),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
   const ctx=canvas.getContext('2d',{willReadFrequently:true}),cells=[];
@@ -23,6 +24,7 @@ export class PaddockRoom {
     for(const b of root.querySelectorAll('[data-paddock-command]'))b.addEventListener('click',()=>{this.audio.unlock();const command=b.dataset.paddockCommand;if(paddockCommand(this.state,command)){if(command==='call')this.audio.snort();const messages={ball:'Le ballon est lancé ! Ton poney part le chercher.',call:'Viens, mon poney !',lunge:'Rejoins le centre, puis choisis une allure.',free:'À vous de jouer ! Déplace-toi ou lance le ballon.',reverse:'On change de main en douceur.',stop:'Arrêt. Ton poney se repose.',walk:'Au pas, tout tranquillement.',trot:'Au trot !',gallop:'Au galop ! Regarde ton poney courir.'};this.message(messages[command]);this.updateUI();}});
     root.querySelector('#paddock-pause').addEventListener('click',()=>{this.state.status=this.state.status==='playing'?'paused':'playing';this.release();this.updateUI();});
     root.querySelector('#paddock-exit').addEventListener('click',event=>{event.preventDefault();event.stopPropagation();this.release();this.onExit();});
+    root.querySelector('#paddock-courtyard').addEventListener('click',event=>{event.preventDefault();event.stopPropagation();this.release();this.onExit();});
     root.querySelector('#paddock-mount').addEventListener('click',()=>{this.release();this.onMount();});
     this.canvas.addEventListener('pointerdown',event=>{
       if(this.state.status!=='playing')return;
@@ -44,7 +46,7 @@ export class PaddockRoom {
     if(!image)throw new Error('Personnage de l’enclos indisponible.');
     if(!this.cache.has(image))this.cache.set(image,atlas(image,4,2));
     this.actor=this.cache.get(image);const motion=this.photos.characters[character]?.paddockMotion;
-    this.motion=motion?actorAtlas(motion):null;this.lastRender=-1000;this.walkBlend=0;this.lastUI='';this.horseDirection=3;
+    this.motion=motion?actorAtlas(motion):null;const directions=this.photos.characters[character]?.walkDirections;this.directional=directions?actorAtlas(directions):null;this.actorDirection='front';this.lastRender=-1000;this.walkBlend=0;this.lastUI='';this.horseDirection=3;
     this.state=createPaddock({age:CHARACTERS[character]?.age});this.release();this.message('Flèches ou clic sur l’herbe pour marcher. Appelle ton poney ou lance le ballon.');this.updateUI();
   }
   release(){this.held.clear();}
@@ -65,7 +67,7 @@ export class PaddockRoom {
     this.root.querySelector('#paddock-pause').textContent=s.status==='paused'?'Reprendre':'Pause';
     this.root.querySelector('#paddock-score').textContent=outside?ZONES[s.zone].name:s.mode==='lunge'?'Tours : '+s.laps+' / 3 · '+(s.direction===1?'Main gauche':'Main droite'):'Ballons rapportés : '+s.games;
     const portals=this.root.querySelector('#estate-portals');portals.replaceChildren();
-    if(s.mode==='free')for(const portal of ZONES[s.zone].portals){
+    if(s.mode==='free'&&s.zone!=='paddock')for(const portal of ZONES[s.zone].portals){
       const b=document.createElement('button'),point=projectEstate(portal.x,portal.z,s.zone);b.className='estate-portal';b.dataset.portal=portal.id;b.textContent=(s.portal===portal.id?'→ ':'')+portal.label;b.style.left=point.x/12+'%';b.style.top=(point.y-28)/8+'%';
       b.addEventListener('click',()=>{if(s.zone==='paddock'&&portal.id==='yard'){this.release();this.onExit();return;}if(visitPortal(s,portal.id)){this.message('Ta cavalière marche vers '+portal.label.toLowerCase()+'.');this.updateUI();}});portals.append(b);
     }
@@ -100,7 +102,7 @@ export class PaddockRoom {
     if(s.mode==='lunge'){
       c.strokeStyle='#fff4cc80';c.lineWidth=2;c.setLineDash([5,9]);c.beginPath();
       for(let i=0;i<=80;i++){const a=i/80*Math.PI*2,q=project(Math.sin(a)*LUNGE_RADIUS,Math.cos(a)*LUNGE_RADIUS);if(!i)c.moveTo(q.x,q.y);else c.lineTo(q.x,q.y);}c.stroke();c.setLineDash([]);
-      const from={x:p.x+actorHeight*.09,y:p.y-actorHeight*.44},to={x:h.x+(direction===0?1:direction===2?-1:0)*horseHeight*.34,y:h.y-horseHeight*(direction===1?.83:direction===3?.66:.69)};
+      const from={x:p.x+(h.x<p.x?-1:1)*actorHeight*.09,y:p.y-actorHeight*.44},to={x:h.x+(direction===0?1:direction===2?-1:0)*horseHeight*.34,y:h.y-horseHeight*(direction===1?.83:direction===3?.66:.69)};
       c.lineWidth=2.2;c.strokeStyle='#5f4430';c.beginPath();c.moveTo(from.x,from.y);c.quadraticCurveTo((from.x+to.x)/2,(from.y+to.y)/2+25,to.x,to.y);c.stroke();
     }
     let pose=null,standingPose=null;
@@ -114,7 +116,9 @@ export class PaddockRoom {
     }
     const horsePose=s.horse.speed<.08?{from:direction*4,to:direction*4,mix:0}:cyclePose(s.horse.travel/(s.gait==='gallop'?2.6:s.gait==='trot'?1.8:1.25)*4,4,direction*4);
     if(this.reduced){horsePose.to=horsePose.from;horsePose.mix=0;}
-    const subjects=[{z:s.player.z,draw:()=>this.motion?drawActor(c,this.motion,pose,p.x,p.y,actorHeight,{flip:s.mode==='free'&&s.player.facing<0,breath:this.reduced?0:Math.sin(s.time*2)*.002,other:standingPose,weight:clamp((this.walkBlend-.45)/.1)}):this.drawFigure(this.actor,actorIndex,p,actorHeight,s.mode==='free'&&s.player.facing<0)},{z:s.horse.z,draw:()=>drawActor(c,s.gait==='gallop'?this.gallopMotion:this.horseMotion,detailPose(horsePose),h.x,h.y,horseHeight,{breath:this.reduced?0:Math.sin(s.time*1.6)*.0015})}];
+    const actorView=flatCharacterView(s.player.vx,s.player.vz,this.character,this.actorDirection);this.actorDirection=actorView.direction;
+    const directionalPose=s.player.speed>.04?detailPose(cyclePose(s.player.travel/(this.character==='emmy'?.85:1)*4,4,actorView.row*4)):{from:actorView.row*4,to:actorView.row*4,mix:0};
+    const subjects=[{z:s.player.z,draw:()=>this.directional&&s.mode==='free'?drawActor(c,this.directional,directionalPose,p.x,p.y,actorHeight,{flip:actorView.flip,breath:this.reduced?0:Math.sin(s.time*2)*.002}):this.motion?drawActor(c,this.motion,pose,p.x,p.y,actorHeight,{flip:s.mode==='lunge'?s.horse.x<s.player.x:s.player.facing<0,breath:this.reduced?0:Math.sin(s.time*2)*.002,other:standingPose,weight:clamp((this.walkBlend-.45)/.1)}):this.drawFigure(this.actor,actorIndex,p,actorHeight,s.mode==='free'&&s.player.facing<0)},{z:s.horse.z,draw:()=>drawActor(c,s.gait==='gallop'?this.gallopMotion:this.horseMotion,detailPose(horsePose),h.x,h.y,horseHeight,{breath:this.reduced?0:Math.sin(s.time*1.6)*.0015})}];
     if(s.ball){const ball=s.ball;subjects.push({z:ball.z,draw:()=>{
       const progress=Math.min(1,ball.time),q=project(ball.fromX+(ball.x-ball.fromX)*progress,ball.fromZ+(ball.z-ball.fromZ)*progress),radius=13*q.scale,bounce=ball.time<1?Math.sin(progress*Math.PI)*90:0;
       this.shadow(q,18*q.scale);this.drawFigure(this.ballAtlas,0,{x:q.x,y:q.y-bounce},radius*2);
@@ -123,6 +127,6 @@ export class PaddockRoom {
     if(s.target&&s.mode==='free'){const q=project(s.target.x,s.target.z);c.strokeStyle='#fff9d3cc';c.lineWidth=2;c.beginPath();c.ellipse(q.x,q.y,12*q.scale,5*q.scale,0,0,Math.PI*2);c.stroke();}
     if(s.status==='paused'){c.fillStyle='#17342560';c.fillRect(0,0,1200,800);c.font='bold 38px Trebuchet MS';c.fillStyle='#fff9e8';c.textAlign='center';c.fillText('Petite pause',600,370);}
     this.canvas.dataset.playerX=s.player.x.toFixed(2);this.canvas.dataset.playerZ=s.player.z.toFixed(2);this.canvas.dataset.horseX=s.horse.x.toFixed(2);this.canvas.dataset.horseZ=s.horse.z.toFixed(2);
-    this.canvas.dataset.direction=direction;const name=this.photos.characters[this.character]?CHARACTERS[this.character].name:'La cavalière';this.canvas.setAttribute('aria-label',name+' et son poney '+(s.mode==='lunge'?'en longe, '+s.laps+' tours.':'en liberté.'));
+    this.canvas.dataset.direction=direction;this.canvas.dataset.actorFacing=actorView.direction;this.canvas.dataset.actorFlip=String(actorView.flip);const name=this.photos.characters[this.character]?CHARACTERS[this.character].name:'La cavalière';this.canvas.setAttribute('aria-label',name+' et son poney '+(s.mode==='lunge'?'en longe, '+s.laps+' tours.':'en liberté.'));
   }
 }
