@@ -2,13 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createGame,advance,jump,COURSES,PACES,timeToTarget,JUMP_PREPARATION,JUMP_FLIGHT,localToGate} from '../engine.mjs';
 import {createTrail,TRAILS} from '../trails.mjs';
+import {setRideGait} from '../riding.mjs';
+import {featureLocal} from '../route-features.mjs';
 import {createPaddock,paddockCommand,advancePaddock} from '../paddock.mjs';
 import {visitPortal,advanceEstate,ZONES} from '../estate.mjs';
 import {createStable,restoreStable,care,fitTack,prepareForRide,settleRide} from '../stable.mjs';
 import {PONIES} from '../ponies.mjs';
 
 function runToEnd(g,{jumps=false,input={}}={}){
+  if(g.activity==='trail')setRideGait(g,g.pace);
   for(let i=0;i<40000&&g.status==='playing';i++){
+    if(g.activity==='trail')for(const f of g.features)if(f.kind==='log'){const p=featureLocal(f,g.x,g.z);if(p.forward>0&&p.forward/Math.max(.1,g.speed)<.53&&Math.abs(p.side)<f.width/2+.3)jump(g);}
     if(jumps&&timeToTarget(g)<JUMP_PREPARATION+JUMP_FLIGHT*.5)jump(g);
     if(g.activity==='trail'){const t=g.waypoints[g.nextWaypoint],angle=Math.atan2(-(t.x-g.x),-(t.z-g.z))-g.heading,delta=Math.atan2(Math.sin(angle),Math.cos(angle));advance(g,1/120,{up:true,left:delta>.02,right:delta<-.02});}else advance(g,1/120,input);
   }

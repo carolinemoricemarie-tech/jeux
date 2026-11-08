@@ -3,6 +3,7 @@ export const TRAIL_BOUNDS={minX:-70,maxX:75,minZ:-70,maxZ:75};
 export const TRAIL_SPEEDS={gentle:2.2,trot:4.2,gallop:7};
 export function coastline(z){return -5+Math.sin(z*.033)*2.2+Math.sin(z*.09)*.6;}
 export function groundHeight(theme,x,z){
+  if(theme==='paddock')return 0;
   if(theme==='beach'){
     const inland=x-coastline(z);
     return inland<0?Math.max(-1.45,inland*.105):.16+Math.min(1.4,inland*.025)+Math.sin(z*.055)*.025;

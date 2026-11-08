@@ -7,8 +7,9 @@ import { CHARACTERS } from './characters.mjs';
 import { createPhotoWorld } from './scene3d.mjs';
 import { createGame, jump, advance, COURSES, LEVELS, BOUNDS, PACES, ridingRules, resetToTarget, timeToTarget, JUMP_PREPARATION, JUMP_FLIGHT } from './engine.mjs';
 import {PONIES} from './ponies.mjs';
-import {TRAILS,createTrail} from './trails.mjs';
-import {createCentre,advanceCentre,nearestCentreInteraction,interactCentre,walkCentreTo,BOXES} from './centre.mjs';
+import {TRAILS,createTrail,createFreeRide} from './trails.mjs';
+import {setRideGait,changeRideGait,GAIT_LABELS} from './riding.mjs';
+import {createCentre,advanceCentre,nearestCentreInteraction,interactCentre,walkCentreTo,activateCentreObject,BOXES} from './centre.mjs';
 import { SAVE_KEY, NEEDS, restoreStable, care, mood, rideReadiness, settleRide, tackReadiness, fitTack, removeTack, prepareForRide, TACK_ORDER } from './stable.mjs';
 
 const $ = id => document.getElementById(id);
@@ -46,7 +47,7 @@ let world,room,paddock,lastBusy=null;
 $('mount').disabled=true;$('course-tab').disabled=true;$('paddock-tab').disabled=true;
 createPhotoWorld(canvas,{reducedMotion,onLost:()=>{if(game?.status==='playing')pause();$('webgl-error').hidden=false;}})
 .then(instance=>{world=instance;room=new StableRoom($('stable-room'),world.photos,{reducedMotion});
-  paddock=new PaddockRoom($('paddock-room'),world.photos,{audio,reducedMotion,onExit:()=>openCentre('paddock'),onEnterBox:id=>{chosen=id;goHome();message('Bienvenue dans le box de '+ponies[id].name+' !');},onZone:name=>$('place-name').textContent=name.toUpperCase(),onReward:kind=>{
+  paddock=new PaddockRoom($('paddock-room'),world.photos,{audio,reducedMotion,onExit:()=>openCentre('paddock'),onMount:openFreeRide,onEnterBox:id=>{chosen=id;goHome();message('Bienvenue dans le box de '+ponies[id].name+' !');},onZone:name=>$('place-name').textContent=name.toUpperCase(),onReward:kind=>{
     const pony=ponyState();pony.bond=Math.min(100,pony.bond+(kind==='ball'?3:6));if(kind==='lunge')pony.energy=Math.max(0,pony.energy-3);refreshStable();save();
   }});
   const available=Object.keys(world.photos.characters);$('character-picker').hidden=!available.length;
@@ -148,13 +149,14 @@ function show(panel) {
   for(const id of ['welcome','paused','result'])$(id).hidden=id!==panel;
 }
 function setView(next) {
-  view=next;document.body.classList.toggle('in-course',['course','trail'].includes(view));document.body.classList.toggle('in-paddock',view==='paddock');document.body.classList.toggle('in-centre',view==='centre');canvas.classList.toggle('in-stable',view==='stable');
+  $('toast').classList.remove('visible');toastUntil=0;view=next;document.body.classList.toggle('in-course',['course','trail'].includes(view));document.body.classList.toggle('in-paddock',view==='paddock');document.body.classList.toggle('in-centre',view==='centre');canvas.classList.toggle('in-stable',view==='stable');
   if(world)world.lastCourseView=false;releaseInputs();
   for(const id of ['stable-room','stable-bubble','stable-caption','box-tag'])$(id).hidden=view!=='stable';
   for(const id of ['ride-hud','ride-progress','navigation'])$(id).hidden=!['course','trail'].includes(view);
   $('course-panel').hidden=view!=='course';$('trail-panel').hidden=view!=='trail';
   $('paddock-room').hidden=view!=='paddock';
   $('centre-ui').hidden=view!=='centre';$('trail-menu').hidden=true;$('travel-toolbar').hidden=view!=='trail';
+  $('dismount').hidden=true;$('change-trail').hidden=false;$('ride-stop').hidden=view!=='trail';$('gait-status').hidden=view!=='trail';
   $('controls').hidden=true;$('pause').hidden=true;
   for(const [id,selected] of [['stable-tab',view==='stable'],['centre-tab',view==='centre'],['course-tab',view==='course'],['paddock-tab',view==='paddock'],['trails-tab',view==='trail']]){
     if(selected)$(id).setAttribute('aria-current','page');else $(id).removeAttribute('aria-current');
@@ -203,7 +205,7 @@ function trailPreview(id=trail){
   const config=TRAILS[trail],reason=rideReadiness(ponyState())||tackReadiness(ponyState());
   $('trail-panel').hidden=true;
   $('course-title').textContent=config.name;$('place-name').textContent=config.name.toUpperCase();$('course-icon').textContent=config.icon;$('course-description').textContent=config.description;
-  $('course-help').textContent='Maintiens ↑ pour avancer, relâche pour t’arrêter. ← → pour tourner. '+(id==='seaside'?'Tu peux entrer doucement dans la mer et te baigner.':'Promène-toi à ton rythme sur le chemin.');
+  $('course-help').textContent='↑ une pression : pas, deux : trot, trois : galop. ↓ pour ralentir puis arrêter. ← → pour tourner. Espace pour sauter les troncs. '+(id==='seaside'?'Tu peux entrer doucement dans la mer et te baigner.':'Un petit pont et des troncs t’attendent sur le chemin.');
   $('duration').textContent='Balade sans élimination · pas, trot ou galop';$('start').textContent=reason?'Préparer et partir ! →':'Partir en balade ! →';$('ride-preparation').hidden=!reason;$('ride-preparation').textContent=reason?reason+' La préparation peut être faite pour toi.':'';$('prepare-stable').hidden=!reason;show('welcome');$('start').focus({preventScroll:true});
   for(const b of document.querySelectorAll('[data-trail]'))b.classList.toggle('active',b.dataset.trail===trail);
   if(matchMedia('(max-width:700px)').matches)$('scene').scrollIntoView({block:'center'});
@@ -213,23 +215,49 @@ function openTrailMenu(){
 }
 function openCentre(from='yard'){
   if(!world||isBusy())return;goHome();centre ||= createCentre({age:CHARACTERS[stable.character].age,progress:stable.centre});centre.status='playing';centre.walkSpeed=stable.character==='emmy'?1.8:2.1;
-  centre.target=null;centre.path=[];centre.pending=null;
+  centre.target=null;centre.path=[];centre.pending=null;centre.pony=chosen;
   if(from==='paddock'){Object.assign(centre.player,{x:23,z:15,heading:Math.PI/2,speed:0});centre.target=null;centre.path=[];}
   if(from==='box'){const b=BOXES.find(b=>b.pony===chosen);if(b){centre.doors[b.id]=true;Object.assign(centre.player,{x:b.side*5.7,z:b.z+1.6,heading:b.side*Math.PI/2,speed:0});}}
-  setView('centre');show(null);lastCentreUI='';$('place-name').textContent='LE CENTRE ÉQUESTRE';$('centre-pause').textContent='Pause';audio.unlock();updateCentreUI();save();
+  setView('centre');show(null);$('centre-map').hidden=true;$('centre-map-toggle').setAttribute('aria-expanded','false');lastCentreUI='';$('place-name').textContent='LE CENTRE ÉQUESTRE';$('centre-pause').textContent='Pause';audio.unlock();updateCentreUI();save();
   if(matchMedia('(max-width:700px)').matches)$('scene').scrollIntoView({block:'center'});
 }
 function centreEvents(events){
   if(!events.length)return;
   for(const event of events){
     if(event.type==='care'){chosen=event.pony;goHome();message('Tu es auprès de '+ponies[chosen].name+'. Les soins sont à portée de main.');}
+    else if(['equip','snack','groom'].includes(event.type)){chosen=event.pony||chosen;goHome();if(event.type==='equip')doEquip(event.item);else doCare(event.action||'brush');}
     else if(event.type==='paddock')$('paddock-tab').click();
     else if(event.type==='rides')openTrailMenu();
     else if(event.type==='job'){
       const p=stable.ponies[event.pony];if(event.action==='hay'){p.food=Math.min(100,p.food+15);notify('Du foin tout frais pour '+ponies[event.pony].name+' !');}else if(event.action==='water'){p.bond=Math.min(100,p.bond+5);notify('L’abreuvoir est rempli d’eau fraîche.');}else{p.clean=Math.min(100,p.clean+15);notify('Un box propre et une paille toute fraîche !');}refreshStable();
-    }else if(event.type==='tack')notify('La sellerie : tapis, selles et filets sont rangés ici.');else if(event.type==='groom')notify('L’aire de pansage est prête pour vos prochains soins.');
+    }else if(event.type==='tack')notify('La sellerie : clique sur le tapis, la selle ou le filet.');
   }save();
 }
+const centreButtons=new Map();
+function updateCentreHotspots(){
+  if(!world||!centre)return;const visible=world.centreHotspots(centre),ids=new Set(visible.map(i=>i.id));
+  for(const [id,b]of centreButtons)b.hidden=!ids.has(id);
+  const placed=[],width=canvas.clientWidth,small=width<500;
+  for(const item of visible){let b=centreButtons.get(item.id);if(!b){b=document.createElement('button');b.className='centre-hotspot';b.dataset.centreAction=item.id;b.addEventListener('click',e=>{e.stopPropagation();centreEvents(activateCentreObject(centre,item.id));lastCentreUI='';updateCentreUI();});$('centre-hotspots').append(b);centreButtons.set(item.id,b);}
+    const w=(item.label.length*(small?4:5.5)+20)/width*100,left=Math.max(w/2+1,Math.min(99-w/2,item.left));let top=item.top;
+    for(const offset of [0,-6,6,-12,12,-18,18]){const y=Math.max(18,Math.min(79,item.top+offset));if(!placed.some(p=>Math.abs(left-p.x)<(w+p.w)/2+1&&Math.abs(y-p.y)<5.8)){top=y;break;}}
+    placed.push({x:left,y:top,w});b.hidden=false;b.style.left=left+'%';b.style.top=top+'%';if(b.textContent!==item.label)b.textContent=item.label;b.disabled=centre.status!=='playing'||centre.actionUntil>centre.time;
+  }
+}
+function openFreeRide(){
+  if(!world)return;goHome();prepareForRide(ponyState());refreshStable();save();activity='paddock';game=createFreeRide(stable.character);setView('trail');show(null);lockChoices(true);
+  $('trails-tab').removeAttribute('aria-current');$('paddock-tab').setAttribute('aria-current','page');$('place-name').textContent='L’ENCLOS · EN SELLE LIBREMENT';$('course-panel').hidden=true;$('trail-panel').hidden=true;$('ride-hud').hidden=true;$('ride-progress').hidden=true;$('navigation').hidden=true;
+  $('controls').hidden=false;$('pause').hidden=false;$('jump').disabled=false;$('reposition').hidden=true;$('dismount').hidden=false;$('change-trail').hidden=true;$('travel-toolbar').hidden=false;
+  $('control-caption').innerHTML='<p><strong>Ton enclos, en toute liberté</strong><span>↑ pas → trot → galop · ↓ ralentir · ← → tourner · Espace sauter</span></p>';
+  $('pause').textContent='Pause';document.querySelector('.steering').hidden=false;refreshGait();audio.unlock();last=0;
+}
+function refreshGait(){
+  if(!game||!['trail','paddock'].includes(game.activity))return;
+  $('gait-status').textContent=GAIT_LABELS[game.gaitStep||0];
+  for(const b of document.querySelectorAll('[data-live-pace]'))b.setAttribute('aria-pressed',game.gaitStep>0&&b.dataset.livePace===game.pace);
+  $('ride-stop').setAttribute('aria-pressed',!game.gaitStep);
+}
+function pressGait(direction){if(changeRideGait(game,direction)){pace=game.pace;refreshGait();notify(GAIT_LABELS[game.gaitStep]);}}
 function updateCentreUI(){
   if(!centre)return;const item=nearestCentreInteraction(centre),close=item?.distance<=3,busy=centre.actionUntil>centre.time,key=[item?.id,item?.label,close,busy,centre.status,Object.keys(centre.jobs).length].join(':');if(key===lastCentreUI)return;lastCentreUI=key;
   $('centre-interact').disabled=!close||busy||centre.status!=='playing';$('centre-interact').textContent=busy?'Ton geste se termine…':close?item.label:'Approche-toi d’une porte ou d’un objet';$('centre-jobs').textContent=Object.keys(centre.jobs).length+' petites attentions aujourd’hui ♡';
@@ -247,10 +275,11 @@ function start() {
   audio.unlock();resetCelebration();releaseInputs();game=activity==='trail'?createTrail(trail,pace,{character:stable.character}):createGame(pace,course,{countdown:true,character:stable.character});game.status='countdown';game.countdown=3;last=0;show(null);refreshRide();lockChoices(true);
   $('course-panel').hidden=true;$('trail-panel').hidden=true;$('controls').hidden=false;$('pause').hidden=false;$('jump').disabled=true;
   document.querySelector('.steering').hidden=game.autoSteer;$('reposition').hidden=game.autoSteer||activity==='trail';
-  $('control-caption').innerHTML='<p><strong>'+ (game.autoSteer?'Ton poney tient le chemin':'À toi de tenir les rênes !')+'</strong><span>'+(game.activity==='trail'?'↑ maintenue pour avancer · relâche pour t’arrêter · ← → tourner':game.autoSteer?'Espace pour sauter · choisis ton allure':'Flèches pour diriger · Espace pour sauter')+'</span></p>';
+  $('control-caption').innerHTML='<p><strong>'+ (game.autoSteer?'Ton poney tient le chemin':'À toi de tenir les rênes !')+'</strong><span>'+(game.activity==='trail'?'↑ pas → trot → galop · ↓ ralentir · ← → tourner · Espace sauter':game.autoSteer?'Espace pour sauter · choisis ton allure':'Flèches pour diriger · Espace pour sauter')+'</span></p>';
   $('countdown').hidden=false;$('countdown-number').textContent='3';audio.countdown(3);
   $('pause').textContent='Pause';$('pause').setAttribute('aria-label','Mettre en pause');
   for(const b of document.querySelectorAll('[data-live-pace]'))b.setAttribute('aria-pressed',b.dataset.livePace===pace);
+  refreshGait();
   $('announcer').textContent=`Tu es en selle sur ${ponies[chosen].name}. Départ dans trois secondes.`;
   if(matchMedia('(max-width:700px)').matches)$('scene').scrollIntoView({block:'center'});
 }
@@ -335,18 +364,23 @@ for(const button of document.querySelectorAll('[data-pace]'))button.addEventList
 for(const button of document.querySelectorAll('[data-live-pace]'))button.addEventListener('click',()=>{
   if(!game||!['playing','countdown','paused'].includes(game.status))return;
   pace=button.dataset.livePace;game.pace=pace;
+  if(['trail','paddock'].includes(game.activity))setRideGait(game,pace);
   for(const b of document.querySelectorAll('[data-live-pace]'))b.setAttribute('aria-pressed',b===button);
   for(const b of document.querySelectorAll('[data-pace]')){b.setAttribute('aria-pressed',b.dataset.pace===pace);b.classList.toggle('active',b.dataset.pace===pace);}
   notify(pace==='gallop'?'Au galop !':pace==='trot'?'Au trot !':'Au pas, tranquillement.');
+  refreshGait();
 });
+$('ride-stop').addEventListener('click',()=>{if(setRideGait(game,'stop')){refreshGait();notify('On s’arrête en douceur.');}});
+$('dismount').addEventListener('click',()=>$('paddock-tab').click());
 for(const b of document.querySelectorAll('[data-trail]'))b.addEventListener('click',()=>trailPreview(b.dataset.trail));
 $('trails-tab').addEventListener('click',openTrailMenu);
-$('change-trail').addEventListener('click',openTrailMenu);$('trail-to-centre').addEventListener('click',()=>openCentre());
+$('change-trail').addEventListener('click',openTrailMenu);$('trail-to-centre').addEventListener('click',()=>openCentre(game?.activity==='paddock'?'paddock':'yard'));
 $('centre-tab').addEventListener('click',()=>openCentre());$('leave-box').addEventListener('click',()=>openCentre('box'));
+$('centre-map-toggle').addEventListener('click',()=>{$('centre-map').hidden=!$('centre-map').hidden;$('centre-map-toggle').setAttribute('aria-expanded',!$('centre-map').hidden);});
 $('centre-to-paddock').addEventListener('click',()=>$('paddock-tab').click());
 $('centre-interact').addEventListener('click',()=>{if(centre)centreEvents(interactCentre(centre));lastCentreUI='';updateCentreUI();});
 $('centre-pause').addEventListener('click',()=>{if(!centre)return;centre.status=centre.status==='playing'?'paused':'playing';releaseInputs();$('centre-pause').textContent=centre.status==='paused'?'Reprendre':'Pause';lastCentreUI='';updateCentreUI();});
-for(const b of document.querySelectorAll('[data-centre-go]'))b.addEventListener('click',()=>{if(!centre)return;const [x,z]=b.dataset.centreGo.split(',').map(Number);walkCentreTo(centre,x,z);});
+for(const b of document.querySelectorAll('[data-centre-go]'))b.addEventListener('click',()=>{if(!centre)return;const [x,z]=b.dataset.centreGo.split(',').map(Number);walkCentreTo(centre,x,z);$('centre-map').hidden=true;$('centre-map-toggle').setAttribute('aria-expanded','false');});
 for(const b of document.querySelectorAll('[data-centre-input]')){
   b.addEventListener('pointerdown',e=>{if(centre?.status!=='playing')return;e.preventDefault();b.setPointerCapture(e.pointerId);touchKeys.add(b.dataset.centreInput);});
   for(const name of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(name,()=>touchKeys.delete(b.dataset.centreInput));
@@ -379,10 +413,9 @@ canvas.addEventListener('pointerdown',event=>{
   if(event.button!==0)return;
   if(view==='course'&&game)jump(game);
   if(view==='centre'&&centre?.status==='playing'){
+    const id=world.centrePickObject(event.clientX,event.clientY);if(id){centreEvents(activateCentreObject(centre,id));return;}
     const point=world.centreGroundPoint(event.clientX,event.clientY);if(!point)return;
-    const picked=nearestCentreInteraction({...centre,player:point});
-    if(picked.distance<1.3){const distance=Math.hypot(centre.player.x-picked.x,centre.player.z-picked.z);if(distance<3){centreEvents(interactCentre(centre,{...picked,distance}));}else{const door=picked.id.startsWith('door:');walkCentreTo(centre,door?Math.sign(picked.x)*2.1:picked.x,picked.z);centre.pending=picked;}}
-    else walkCentreTo(centre,point.x,point.z);
+    walkCentreTo(centre,point.x,point.z);
   }
 });
 let orbitDrag=null;
@@ -411,6 +444,7 @@ window.addEventListener('keydown',event=>{
     if(event.code==='Escape'&&!event.repeat){event.preventDefault();$('centre-pause').click();}return;
   }
   if(game&&['playing','countdown'].includes(game.status)){
+    if(['trail','paddock'].includes(game.activity)&&['ArrowUp','ArrowDown'].includes(event.code)){event.preventDefault();if(!event.repeat)pressGait(event.code==='ArrowUp'?1:-1);return;}
     if(arrowKeys[event.code]){event.preventDefault();heldKeys.add(arrowKeys[event.code]);}
     if(event.code==='Space'){
       event.preventDefault();if(!event.repeat)jump(game);
@@ -424,6 +458,7 @@ window.addEventListener('blur',()=>{releaseInputs();if(game&&['playing','countdo
 for(const button of document.querySelectorAll('[data-input]')){
   button.addEventListener('pointerdown',event=>{
     if(!game||!['playing','countdown'].includes(game.status))return;event.preventDefault();button.setPointerCapture(event.pointerId);touchKeys.add(button.dataset.input);button.classList.add('held');
+    if(['trail','paddock'].includes(game.activity)&&['up','down'].includes(button.dataset.input))pressGait(button.dataset.input==='up'?1:-1);
   });
   const release=()=>{touchKeys.delete(button.dataset.input);button.classList.remove('held');};
   for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,release);
@@ -449,6 +484,8 @@ function frame(now){
     const events=advance(game,dt,inputState());
     if(events.includes('start')){startFlashUntil=now+650;audio.countdown(0);$('jump').disabled=false;notify(game.autoSteer?'Ton poney suit le chemin · Espace pour sauter':'← → pour tourner · Espace pour sauter');}
     if(events.includes('bump'))notify(game.maxMisses===null?'On continue ! Essaie de sauter le prochain obstacle.':`Obstacle manqué : ${game.bumps} / ${game.maxMisses} erreurs`);
+    if(events.includes('log-stop'))notify('Un tronc ! Appuie sur Espace pour sauter, ou contourne-le.');
+    if(events.includes('log-jump')){notify('Joli saut au-dessus du tronc !');audio.clear();}
     else if(events.includes('clear')){notify('Un obstacle réussi ! Bravo ! 🎀');audio.clear();}
     else if(events.includes('edge'))notify('Tourne pour rester dans la carrière, ou choisis Me replacer.');
     if(events.length||now-lastHudAt>=80){refreshRide();lastHudAt=now;}
@@ -468,7 +505,7 @@ function frame(now){
   updateActionUI(now);
   if(view==='stable'&&room)room.render(ponyState(),activeEffect,now);
   else if(view==='paddock'&&paddock){if($('entry-screen').hidden)paddock.step(dt,inputState());paddock.render(now);}
-  else if(view==='centre'&&centre&&world){centreEvents(advanceCentre(centre,dt,inputState()));const location=world.renderCentre(centre,stable.character,centre.status==='playing'?dt:0);if(location&&$('centre-location').textContent!==location)$('centre-location').textContent=location;updateCentreUI();}
+  else if(view==='centre'&&centre&&world){centreEvents(advanceCentre(centre,dt,inputState()));if(view==='centre'){const location=world.renderCentre(centre,stable.character,centre.status==='playing'?dt:0);if(location&&$('centre-location').textContent!==location)$('centre-location').textContent=location;updateCentreUI();updateCentreHotspots();}}
   else if(world)world.render(view,game,ponies[chosen],ponyState(),activeEffect,clock,dt,course);
   requestAnimationFrame(frame);
 }

@@ -1,5 +1,6 @@
 import { createRail,railPoint } from './guidance.mjs';
 import {TRAIL_SPEEDS,waterDepth} from './terrain.mjs';
+import {featureLocal} from './route-features.mjs';
 export const MAX_MISSES = 3;
 export const PACES={gentle:{cruise:4.8,max:9},trot:{cruise:6.5,max:11},gallop:{cruise:8.5,max:13}};
 export function ridingRules(character,course){return {maxMisses:character==='emmy'?null:MAX_MISSES,autoSteer:character==='emmy'&&COURSES[course]?.level==='beginner'};}
@@ -100,7 +101,7 @@ export function advance(game,dt,input={}) {
     const step=Math.min(remaining,1/120);remaining-=step;game.time+=step;
     game.edgeCooldown=Math.max(0,game.edgeCooldown-step);
     const pace=PACES[game.pace]||PACES.gentle;
-    let targetSpeed=game.manualThrottle?(input.up&&!input.down?(TRAIL_SPEEDS[game.pace]||TRAIL_SPEEDS.gentle):0):game.autoSteer?pace.cruise:input.down?0:input.up?pace.max:pace.cruise;
+    let targetSpeed=game.manualThrottle?(game.gaitStep>0?(TRAIL_SPEEDS[game.pace]||TRAIL_SPEEDS.gentle):0):game.autoSteer?pace.cruise:input.down?0:input.up?pace.max:pace.cruise;
     if(game.activity==='trail'){game.waterDepth=waterDepth(game.theme,game.x,game.z);game.swimming=game.waterDepth>.85;if(game.waterDepth>.15)targetSpeed*=game.swimming?.42:.72;}
     const acceleration=targetSpeed<game.speed?10:4;
     game.speed+=Math.sign(targetSpeed-game.speed)*Math.min(Math.abs(targetSpeed-game.speed),acceleration*step);
@@ -132,6 +133,13 @@ export function advance(game,dt,input={}) {
     if(game.height>0||game.velocity!==0){
       game.height=Math.max(0,game.height+game.velocity*step-.5*JUMP_GRAVITY*step*step);game.velocity-=JUMP_GRAVITY*step;
       if(game.height===0)game.velocity=0;
+    }
+    for(const f of game.features||[])if(f.kind==='log'){
+      const before=featureLocal(f,previous.x,previous.z),after=featureLocal(f,game.x,game.z);
+      if(before.forward*after.forward<=0&&Math.abs(before.forward-after.forward)>1e-8&&Math.abs(after.side)<f.width/2+.25){
+        if(jumpClearance(game)>f.height+.06){if(game.time-(f.lastCrossed??-10)>2){game.natureJumps++;events.push('log-jump');f.lastCrossed=game.time;}}
+        else{game.x=previous.x;game.z=previous.z;game.speed=0;if(game.time-(f.lastStopped??-10)>2){events.push('log-stop');f.lastStopped=game.time;}}
+      }
     }
     for(let i=0;i<game.obstacles.length;i++){
       const gate=game.obstacles[i];

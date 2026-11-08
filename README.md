@@ -1,8 +1,8 @@
 # Les Crins Magiques — Mon écurie interactive 🐴
 
-**[Télécharger la dernière édition familiale : centre et balades libres](https://raw.githubusercontent.com/carolinemoricemarie-tech/jeux/main/downloads/Mon-ecurie-centre-et-balades-libres.zip)** — environ 35 Mo. Aucun compte GitHub nécessaire. Extraire tous les fichiers puis ouvrir **JOUER.html** dans Chrome ou Edge récent, avec le code communiqué en privé. Aucune installation.
+**[Télécharger la dernière édition familiale : liberté et aventures](https://raw.githubusercontent.com/carolinemoricemarie-tech/jeux/main/downloads/Mon-ecurie-liberte-et-aventures.zip)** — environ 36 Mo. Aucun compte GitHub nécessaire. Extraire tous les fichiers puis ouvrir **JOUER.html** dans Chrome ou Edge récent, avec le code communiqué en privé. Aucune installation.
 
-Nuage blanc et licorne blanche à crinière rose avec leurs propres images ; sortie directe de l’enclos ; centre à pied, six boxes ouvrants et sellerie ; balades forêt, mer et campagne à diriger soi-même, baignade en mer. Les neuf parcours de saut et les règles adaptées à Emmy sont conservés.
+Personnages de l’écurie séparés des poneys avec de nouvelles images plus détaillées ; portes et objets du centre identifiés directement ; sortie vers la cour ; monte libre dans l’enclos ; commandes d’allure par pressions successives sur ↑ ; troncs et petits ponts en balade. Les neuf parcours de saut et les règles adaptées à Emmy sont conservés.
 
 
 Un jeu d’équitation en français, avec une écurie interactive, un enclos pour jouer et travailler en longe, et **neuf parcours de dix obstacles**. Emmy joue sans élimination et bénéficie du guidage sur les trois parcours débutants. Louane conserve la limite de trois erreurs. Trois balades à diriger soi-même complètent les activités : forêt, mer et campagne. Le centre équestre se visite à pied, avec six boxes ouvrants et une sellerie.
@@ -51,9 +51,9 @@ Il n’y a pas de chronomètre. On peut se replacer avant un saut et recommencer
 | Échap / Pause | Mettre en pause et reprendre |
 | ⛶ | Passer en plein écran |
 
-Dans les parcours de saut, le cheval avance doucement tout seul. En balade, il attend la flèche ↑ et s’arrête quand elle est relâchée. Le repère indique la direction et la distance du prochain obstacle, la carte montre le circuit et le compteur **Ratés : 0 / 3** rappelle les erreurs déjà faites.
+Dans les parcours de saut, le cheval avance doucement tout seul. En balade et en monte libre, il attend la première pression sur ↑. Les pressions suivantes choisissent le trot puis le galop ; ↓ fait ralentir puis arrêter. Le repère indique la direction et la distance du prochain obstacle, la carte montre le circuit et le compteur **Ratés : 0 / 3** rappelle les erreurs déjà faites.
 
-Sur téléphone et tablette, maintenir les flèches tactiles, puis toucher **Sauter**. Les commandes restent disponibles en plein écran. Changer d’onglet ou de fenêtre met le parcours en pause.
+Sur téléphone et tablette, maintenir ← et → pour tourner. En balade et en monte libre, toucher ↑ ou ↓ une fois par changement d’allure ; le bouton **Sauter** déclenche le saut. Les commandes restent disponibles en plein écran. Changer d’onglet ou de fenêtre met le parcours en pause.
 
 ### Neuf parcours et un vrai départ
 
@@ -84,7 +84,8 @@ Le poney y porte un licol, sans selle ni cavalière sur son dos. La cavalière s
 - **En liberté** : appeler le poney pour qu’il rejoigne la cavalière, lancer un ballon et le laisser le ramener. Chaque ballon rapporté augmente la complicité.
 - **En longe** : rejoindre le centre, choisir le pas, le trot, le galop ou l’arrêt, puis changer de main. La longe visible relie la main de la cavalière au licol. Trois tours renforcent la complicité et consomment un peu d’énergie, une seule fois par visite.
 - **Au galop** est disponible en liberté comme en longe. Le poney peut courir librement autour de l’enclos.
-- **Quitter l’enclos** reste visible en liberté, en longe et en pause ; il rejoint directement le centre en 3D. Le bouton de sortie sur le portail mène au même endroit.
+- **Monter · mouvement libre** ouvre l’enclos en selle : aucune trajectoire imposée, ← et → pour diriger, ↑ pour choisir pas, trot puis galop, ↓ pour ralentir. **Arrêt**, **Descendre du poney** et **Rentrer au centre** restent accessibles. Le matériel est préparé pour cette activité.
+- **Sortir vers la cour** reste visible en liberté, en longe et en pause ; il rejoint directement le centre en 3D. Le bouton de sortie sur le portail mène au même endroit.
 - **Pause** ou Échap fige les déplacements. Le passage dans l’enclos retire le matériel ; il faut le reposer avant un parcours.
 
 Le décor, le poney et les personnages utilisent des images photoréalistes. Le déplacement et la profondeur sont calculés dans `paddock.mjs` et `paddock-room.mjs`, avec seize poses du poney vues de quatre côtés et huit poses de marche et de longe pour chaque personnage.
@@ -119,15 +120,17 @@ Un nouveau soin retire le matériel pour travailler sur le cheval sans selle ; i
 
 ### Trois poneys distincts et le repos
 
-Noisette est bai, Nuage est blanc et Étoile est une licorne poney blanche à crinière et queue rose pâle. Nuage et Étoile ont des atlas photographiques dédiés pour les soins et l’équipement, et Nuage a désormais ses propres vues montées et ses poses dans l’enclos. Aucune recoloration de peau, de vêtements ou de pelage n’est appliquée pendant le jeu. Leurs portraits, les soins, le repos, l’enclos et les scènes montées suivent le choix. Les anciennes sauvegardes de Caramel sont transférées à Étoile en conservant les besoins et l’équipement.
+Noisette est bai, Nuage est blanc et Étoile est une licorne poney blanche à crinière et queue rose pâle. Les trois poneys ont quatre poses d’équipement dans un atlas séparé des enfants. Emmy et Louane ont chacune quatre grands portraits en pied pour les gestes de soins ; ils remplacent les petits personnages inclus dans les anciens atlas combinés. Le rendu 2D de l’écurie travaille en 2400 × 1600 pixels. Nuage conserve ses propres vues montées et ses poses dans l’enclos. Aucune recoloration de peau, de vêtements ou de pelage n’est appliquée pendant le jeu. Leurs portraits, les soins, le repos, l’enclos et les scènes montées suivent le choix. Les anciennes sauvegardes de Caramel sont transférées à Étoile en conservant les besoins et l’équipement.
 
 Un clic sur **Repos** fait avancer la cavalière de côté, puis le poney baisse la tête, plie les jambes et se couche sur la paille. Il reste couché après l’action et après rechargement. Le prochain soin ou équipement le fait se relever.
 
 ### Les balades
 
-L’onglet **Les balades** ouvre trois grandes cartes directement dans le jeu : **forêt**, **mer** et **campagne**. **Changer de balade** reste accessible pendant la promenade. Aucun obstacle imposé ni élimination.
+La forêt et la campagne comportent des troncs et un pont de bois au-dessus d’un petit ruisseau. La plage comporte aussi un tronc échoué. Un tronc touché arrête le poney sans compter de faute ; Espace permet de le sauter, et il reste possible de le contourner. La surface du pont et ses rampes sont prises en compte par le déplacement. Les ombres des arbres et le rythme des foulées lié à l’allure renforcent le relief et la continuité du mouvement.
 
-Le poney n’avance et ne tourne jamais seul en balade : maintenir **↑** pour avancer, relâcher pour s’arrêter, **← →** pour tourner et **↓** pour freiner. Le pas, le trot et le galop se choisissent à tout moment. Les parcours débutants d’Emmy conservent séparément leur aide à la direction.
+L’onglet **Les balades** ouvre trois grandes cartes directement dans le jeu : **forêt**, **mer** et **campagne**. **Changer de balade** reste accessible pendant la promenade. Des troncs à franchir ou à contourner, et aucune élimination.
+
+Le poney attend une commande au départ. Appuyer une fois sur **↑** choisit le pas, deux fois le trot, trois fois le galop ; l’allure reste sélectionnée après relâchement. Chaque pression sur **↓** fait descendre d’une allure jusqu’à l’arrêt. Maintenir ↑ ne répète pas le changement. **← →** dirige librement et **Arrêt** immobilise le poney. Les boutons d’allure restent utilisables à tout moment. Les parcours débutants d’Emmy conservent séparément leur aide à la direction.
 
 La forêt comporte un terrain avec relief, un chemin de terre à bords fondus, un sous-bois de feuilles et de petites plantes, des troncs solides et une canopée photographique. La mer utilise du sable photographique, une rive courbe, des vaguelettes, de l’écume et des reflets. En quittant le sable, les sabots entrent progressivement dans l’eau ; plus loin, le poney flotte et ralentit, avec des remous autour de lui. On peut rejoindre le rivage en le dirigeant. La campagne conserve ses prés, ses clôtures et ses chemins.
 
@@ -178,7 +181,7 @@ Les versions de Three.js et d’esbuild sont verrouillées. La licence MIT de Th
 
 ## Validation
 
-69 tests couvrent le pilotage, les neuf tracés et leurs trois niveaux, le décompte et sa pause, les sauts, la défaite à trois erreurs, les soins, le matériel, la continuité des poses, la sauvegarde du personnage, la marche dans l’enclos, le ballon, la longe, l’arrêt et le changement de main, l’arrêt manuel des trois balades, la baignade, les murs, les six portes et les trajets entre les boxes, la sellerie et la cour.
+74 tests couvrent le pilotage, les neuf tracés et leurs trois niveaux, le décompte et sa pause, les sauts, la défaite à trois erreurs, les soins, le matériel, la continuité des poses, la sauvegarde du personnage, la marche dans l’enclos, le ballon, la longe, l’arrêt et le changement de main, les changements d’allure des trois balades, la monte libre dans l’enclos, les troncs franchissables sans élimination, le tablier du pont, la baignade, les murs, les six portes et les trajets entre les boxes, la sellerie et la cour.
 
 Vérification navigateur : clics sur les objets photographiés de l’écurie, cavalière visible pendant le foin, la carotte et le brossage, équipement dans l’ordre, conservation du matériel après rechargement, huit poses du saut visibles, saut réussi, pause, défaite au troisième raté, gestes tactiles dans la scène, plein écran et absence de requêtes externes.
 

@@ -6,6 +6,8 @@ import { cyclePose,jumpPose,damp,clamp,advanceLanding,detailPose } from './anima
 import {createTrailScene} from './trail-scene.mjs';
 import {CentreScene} from './centre-scene.mjs';
 import {groundHeight} from './terrain.mjs';
+import {trailGroundHeight} from './route-features.mjs';
+import {strideMotion,STRIDE_LENGTHS} from './riding.mjs';
 
 const sphereGeometry=new THREE.SphereGeometry(1,24,16);
 const boxGeometry=new THREE.BoxGeometry(1,1,1);
@@ -249,21 +251,23 @@ export class PonyWorld {
     const pony=this.pony,stable=this.sceneName==='stable';
     pony.mounted.visible=!stable;pony.standing.visible=stable;
     const apply=(texture,pose)=>{
-      pose=detailPose(pose);
+      pose=game?.jumpActive?detailPose(pose):{...pose,mix:pose.mix*pose.mix*(3-2*pose.mix)};
       if(pony.mounted.material.map!==texture){pony.mounted.material.map=texture;pony.mounted.material.needsUpdate=true;}
       texture.offset.x=pose.from/8;pony.mounted.material.userData.poseMix.value=this.reducedMotion?0:pose.mix;
       pony.mounted.material.userData.poseDelta.value=(pose.to-pose.from)/8;
     };
-    if(this.motionGame!==game){this.motionGame=game;this.gaitDistance=0;this.previousTravel=game?.traveled||0;this.previousHeading=game?.heading||0;this.wasJumping=false;this.terminalLanding=null;}
+    if(this.motionGame!==game){this.motionGame=game;this.gaitDistance=0;this.strideLength=null;this.previousTravel=game?.traveled||0;this.previousHeading=game?.heading||0;this.wasJumping=false;this.terminalLanding=null;}
     if(game?.status==='playing'){
       const jumping=game.jumpActive;
       const texture=jumping?pony.jumping:pony.stride;
       const traveled=Math.max(0,game.traveled-this.previousTravel);this.previousTravel=game.traveled;
-      if(!jumping)this.gaitDistance+=traveled;
+      const gait=['trail','paddock'].includes(game.activity)?game.pace:'gallop';
+      this.strideLength=damp(this.strideLength||STRIDE_LENGTHS[gait],STRIDE_LENGTHS[gait],5,dt);
+      if(!jumping)this.gaitDistance+=traveled/this.strideLength;
       if(this.wasJumping&&!jumping)this.gaitDistance=0;this.wasJumping=jumping;
-      const pose=jumping?jumpPose(game.jumpTime):game.speed>.05?cyclePose(this.gaitDistance/5.2*8):{from:0,to:0,mix:0};
+      const motion=strideMotion(this.gaitDistance,game.speed,gait),pose=jumping?jumpPose(game.jumpTime):game.speed>.05?cyclePose(motion.phase):{from:0,to:0,mix:0};
       apply(texture,pose);this.canvas.dataset.jumpPhase=jumping?String(jumpFrame(game)):'ground';this.canvas.dataset.poseBlend=String(pose.mix);
-      pony.body.position.y=game.height;
+      pony.body.position.y=jumping?game.height:damp(pony.body.position.y,this.reducedMotion?0:motion.lift,18,dt);pony.body.rotation.x=damp(pony.body.rotation.x,jumping||this.reducedMotion?0:motion.pitch,10,dt);
       const angle=Math.atan2(Math.sin(game.heading-this.previousHeading),Math.cos(game.heading-this.previousHeading));this.previousHeading=game.heading;
       const bank=this.reducedMotion?0:clamp(angle/Math.max(.001,dt)*.025,-.035,.035);
       pony.body.rotation.z=damp(pony.body.rotation.z,bank,8,dt);
@@ -320,7 +324,7 @@ export class PonyWorld {
       }
     }else{this.finishedGame=null;this.finishTravel=0;}
     this.pony.mounted.visible=true;this.pony.standing.visible=false;
-    const terrainY=view==='trail'?groundHeight(game.theme,state.x,state.z):0,floorY=game?.swimming?Math.max(-.68,terrainY):terrainY;
+    const terrainY=view==='trail'?trailGroundHeight(game.theme,state.x,state.z,game.features):0,floorY=game?.swimming?Math.max(-.68,terrainY):terrainY;
     const floating=game?.swimming?Math.sin(time*3.8)*.035:0;
     this.pony.root.position.set(state.x,floorY+floating,state.z);this.pony.root.rotation.set(0,state.heading,0);
     this.shadow.position.set(state.x,floorY+.018,state.z);this.shadow.rotation.z=state.heading;this.shadow.visible=!game?.swimming;
@@ -339,6 +343,7 @@ export class PonyWorld {
     this.canvas.dataset.cameraX=String(this.camera.position.x);this.canvas.dataset.cameraZ=String(this.camera.position.z);
     this.canvas.dataset.horseX=String(state.x);this.canvas.dataset.horseZ=String(state.z);
     this.canvas.dataset.ponyKind=p.kind||'bay';
+    this.canvas.dataset.activity=game?.activity||'jump';this.canvas.dataset.gaitStep=String(game?.gaitStep||0);this.canvas.dataset.speed=String(state.speed);
     if(view==='trail'){this.canvas.dataset.theme=game.theme;this.canvas.dataset.swimming=!!game.swimming;this.canvas.dataset.waterDepth=String(game.waterDepth||0);scenery.updateRider?.(state);this.renderer.render(activeScene,this.camera);return;}
     const gate=state.obstacles[state.next];
     for(const [i,g] of this.gates.entries()){
@@ -364,7 +369,9 @@ export class PonyWorld {
     const now=performance.now();if(this.software&&now-this.lastRenderAt<1000/30-1)return null;this.lastRenderAt=now;
     if(!this.centreScene)this.centreScene=new CentreScene(this.photos,{shadowSize:this.shadowSize});
     if(this.sceneName!=='centre'){this.sceneName='centre';this.centreScene.cameraReady=false;this.resize();this.renderer.shadowMap.needsUpdate=true;}
-    this.camera.fov=58;this.camera.updateProjectionMatrix();const location=this.centreScene.renderState(state,character,this.camera,dt);this.renderer.render(this.centreScene.scene,this.camera);this.canvas.dataset.centreX=state.player.x.toFixed(2);this.canvas.dataset.centreZ=state.player.z.toFixed(2);return location;
+    this.camera.fov=58;this.camera.updateProjectionMatrix();const location=this.centreScene.renderState(state,character,this.camera,dt);this.renderer.render(this.centreScene.scene,this.camera);this.canvas.dataset.centreX=state.player.x.toFixed(2);this.canvas.dataset.centreZ=state.player.z.toFixed(2);this.canvas.dataset.centreHeading=String(state.player.heading);return location;
   }
   centreGroundPoint(x,y){return this.centreScene?.groundPoint(x,y,this.canvas.getBoundingClientRect(),this.camera);}
+  centrePickObject(x,y){return this.centreScene?.pickObject(x,y,this.canvas.getBoundingClientRect(),this.camera);}
+  centreHotspots(state){return this.centreScene?.hotspots(state,this.camera)||[];}
 }

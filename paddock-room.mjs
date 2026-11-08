@@ -3,7 +3,7 @@ import { CHARACTERS } from './characters.mjs';
 import { actorAtlas,drawActor } from './actor-atlas.mjs';
 import { walkingPose,idlePose,cyclePose,damp,facingDirection,detailPose,clamp } from './animation.mjs';
 import { PONIES } from './ponies.mjs';
-import { ZONES,projectEstate,advanceEstate,visitPortal } from './estate.mjs';
+import { ZONES,projectEstate,visitPortal } from './estate.mjs';
 function atlas(image,columns,rows){
   const w=Math.floor(image.width/columns),h=Math.floor(image.height/rows),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
   const ctx=canvas.getContext('2d',{willReadFrequently:true}),cells=[];
@@ -16,13 +16,14 @@ function atlas(image,columns,rows){
   return{image,w,h,columns,cells,maxHeight:Math.max(...cells.map(b=>b.bottom-b.top+1))};
 }
 export class PaddockRoom {
-  constructor(root,photos,{audio,onReward=()=>{},onEnterBox=()=>{},onZone=()=>{},onExit=()=>{},reducedMotion=false}={}){
-    this.root=root;this.photos=photos;this.audio=audio;this.onReward=onReward;this.onEnterBox=onEnterBox;this.onZone=onZone;this.onExit=onExit;this.reduced=reducedMotion;
+  constructor(root,photos,{audio,onReward=()=>{},onEnterBox=()=>{},onZone=()=>{},onExit=()=>{},onMount=()=>{},reducedMotion=false}={}){
+    this.root=root;this.photos=photos;this.audio=audio;this.onReward=onReward;this.onEnterBox=onEnterBox;this.onZone=onZone;this.onExit=onExit;this.onMount=onMount;this.reduced=reducedMotion;
     this.canvas=root.querySelector('canvas');this.ctx=this.canvas.getContext('2d');this.held=new Set();this.state=createPaddock();this.cache=new Map();
     this.ponyAtlas=atlas(photos.ponyFree,4,4);this.horseMotion=actorAtlas(photos.ponyFree,4,4);this.ballAtlas=atlas(photos.playBall,1,1);this.lastRender=-1000;
     for(const b of root.querySelectorAll('[data-paddock-command]'))b.addEventListener('click',()=>{this.audio.unlock();const command=b.dataset.paddockCommand;if(paddockCommand(this.state,command)){if(command==='call')this.audio.snort();const messages={ball:'Le ballon est lancé ! Ton poney part le chercher.',call:'Viens, mon poney !',lunge:'Rejoins le centre, puis choisis une allure.',free:'À vous de jouer ! Déplace-toi ou lance le ballon.',reverse:'On change de main en douceur.',stop:'Arrêt. Ton poney se repose.',walk:'Au pas, tout tranquillement.',trot:'Au trot !',gallop:'Au galop ! Regarde ton poney courir.'};this.message(messages[command]);this.updateUI();}});
     root.querySelector('#paddock-pause').addEventListener('click',()=>{this.state.status=this.state.status==='playing'?'paused':'playing';this.release();this.updateUI();});
-    root.querySelector('#paddock-exit').addEventListener('click',()=>{this.release();this.onExit();});
+    root.querySelector('#paddock-exit').addEventListener('click',event=>{event.preventDefault();event.stopPropagation();this.release();this.onExit();});
+    root.querySelector('#paddock-mount').addEventListener('click',()=>{this.release();this.onMount();});
     this.canvas.addEventListener('pointerdown',event=>{
       if(this.state.status!=='playing')return;
       const b=this.canvas.getBoundingClientRect(),x=(event.clientX-b.x)/b.width*1200,y=(event.clientY-b.y)/b.height*800;
@@ -71,7 +72,8 @@ export class PaddockRoom {
   }
   step(dt,input){
     const combined=Object.fromEntries(['left','right','up','down'].map(k=>[k,input[k]||this.held.has(k)]));
-    const events=advanceEstate(this.state,dt,combined);
+    const events=advancePaddock(this.state,dt,combined);
+    if(this.state.status==='playing'&&Math.hypot(this.state.player.x-6.1,this.state.player.z+2.7)<.55){this.release();this.onExit();return;}
     for(const event of events){if(event?.type==='box')this.onEnterBox(event.pony);if(event?.type==='zone'){this.onZone(ZONES[event.zone].name);this.message('Tu peux marcher et choisir une porte pour continuer.');if(!this.reduced)this.canvas.animate([{opacity:.3},{opacity:1}],{duration:350});}}
     if(events.includes('ball-found'))this.message('Bravo ! Le poney revient vers toi avec le ballon.');
     if(events.includes('ball-return')){this.message('Ballon rapporté ! Votre complicité grandit.');this.audio.snort();this.onReward('ball');}

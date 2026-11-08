@@ -27,7 +27,7 @@ export function centreLocation(s){
   if(p.z<3&&Math.abs(p.x)<12){const box=BOXES.find(b=>b.side===Math.sign(p.x)&&Math.abs(p.z-b.z)<3.6);return Math.abs(p.x)>3.7&&box?'Box · '+box.name:'L’allée des boxes';}
   return p.x<-16&&p.z<-4&&p.z>-18?'La sellerie':p.x>15?'L’aire de pansage':p.x<-15&&p.z>7?'La grange à foin':'La cour du centre équestre';
 }
-export function nearestCentreInteraction(s){
+export function centreInteractions(s){
   const p=s.player,items=[];
   for(const box of BOXES){
     items.push({id:'door:'+box.id,x:box.side*3.3,z:box.z,label:(s.doors[box.id]?'Fermer':'Ouvrir')+' · '+box.name,box:box.id});
@@ -38,11 +38,28 @@ export function nearestCentreInteraction(s){
       items.push({id:'clean:'+box.id,x:box.x,z:box.z+2,label:'Nettoyer la paille',box:box.id,pony:box.pony});
     }
   }
-  items.push({id:'paddock',x:23,z:15,label:'Entrer dans l’enclos'},{id:'tack',x:-15.8,z:-9,label:(s.doors.sellerie?'Fermer':'Ouvrir')+' la sellerie'},{id:'groom',x:19,z:8,label:'Rejoindre l’aire de pansage'},{id:'rides',x:0,z:28,label:'Partir en balade'});
-  return items.map(item=>({...item,distance:Math.hypot(p.x-item.x,p.z-item.z)})).sort((a,b)=>a.distance-b.distance)[0];
+  items.push({id:'paddock',x:23,z:15,label:'Entrer dans l’enclos'},{id:'tack',x:-15.8,z:-9,label:(s.doors.sellerie?'Fermer':'Ouvrir')+' la sellerie'},
+    {id:'groom',x:19,z:8,label:'Brosser mon poney',pony:s.pony||'noisette',action:'brush'},
+    {id:'rides',x:0,z:28,label:'Partir en balade'},
+    {id:'snack',x:-18,z:17,label:'Offrir une carotte',pony:s.pony||'noisette',action:'carrot'});
+  for(const [i,item]of ['pad','saddle','bridle'].entries())items.push({id:'equip:'+item,x:-22.8,z:-16+i*4,label:['Prendre le tapis','Prendre la selle','Prendre le filet'][i],pony:s.pony||'noisette',item});
+  return items.map(item=>({...item,distance:Math.hypot(p.x-item.x,p.z-item.z)}));
+}
+export function nearestCentreInteraction(s){return centreInteractions(s).sort((a,b)=>a.distance-b.distance)[0];}
+export function activateCentreObject(s,id){
+  if(s.status!=='playing'||s.actionUntil>s.time)return [];
+  const item=centreInteractions(s).find(i=>i.id===id);if(!item)return [];
+  if(id.startsWith('door:')){
+    const box=BOXES.find(b=>b.id===item.box),inside=centreLocation(s)==='Box · '+box.name;
+    s.doors[box.id]=true;
+    walkCentreTo(s,inside?box.side*1.6:box.side*5.7,inside?box.z:box.z+1.6);
+    return [{type:'door',box:box.id,open:true}];
+  }
+  if(item.distance<=3)return interactCentre(s,item);
+  walkCentreTo(s,item.x,item.z);s.pending=item;return [];
 }
 export function walkCentreTo(s,x,z){
-  if(s.status!=='playing')return false;s.path=[];
+  if(s.status!=='playing')return false;s.path=[];s.pending=null;
   const p=s.player,inBarn=(x,z)=>Math.abs(x)<12&&z<3&&z>-25,inTack=(x,z)=>x<-16&&x>-24&&z<-4&&z>-18;
   const currentBarn=inBarn(p.x,p.z),targetBarn=inBarn(x,z),currentTack=inTack(p.x,p.z),targetTack=inTack(x,z),currentWest=p.x<-12&&p.z<3,targetWest=x<-12&&z<3;
   const currentBox=currentBarn&&Math.abs(p.x)>3.7?BOXES.find(b=>b.side===Math.sign(p.x)&&Math.abs(p.z-b.z)<3.7):null;
@@ -66,7 +83,7 @@ export function interactCentre(s,item=nearestCentreInteraction(s)){
     s.action=kind;s.actionUntil=s.time+2.5;s.jobs[item.id]=true;
     return[{type:'job',action:kind,pony:item.pony,id:item.id}];
   }
-  return[{type:kind,pony:item.pony}];
+  return[{type:kind,pony:item.pony,action:item.action,item:item.item}];
 }
 export function advanceCentre(s,dt,input={}){
   if(s.status!=='playing')return [];dt=clamp(dt,0,.1);if(!dt)return [];
