@@ -8,6 +8,7 @@ import { createPhotoWorld } from './scene3d.mjs';
 import { createGame, jump, advance, COURSES, LEVELS, BOUNDS, PACES, ridingRules, resetToTarget, timeToTarget, JUMP_PREPARATION, JUMP_FLIGHT } from './engine.mjs';
 import {PONIES} from './ponies.mjs';
 import {TRAILS,createTrail} from './trails.mjs';
+import {createCentre,advanceCentre,nearestCentreInteraction,interactCentre,walkCentreTo,BOXES} from './centre.mjs';
 import { SAVE_KEY, NEEDS, restoreStable, care, mood, rideReadiness, settleRide, tackReadiness, fitTack, removeTack, prepareForRide, TACK_ORDER } from './stable.mjs';
 
 const $ = id => document.getElementById(id);
@@ -21,6 +22,7 @@ try { saved = localStorage.getItem(SAVE_KEY); } catch { /* The game also works w
 const stable = restoreStable(saved);
 let chosen = stable.chosen, pace = 'gentle', course = 'prairie', view = 'stable',activity='jump',trail='woodland';
 let game = null, clock = 0, last = 0, effect = null, toastUntil = 0;
+let centre=null,lastCentreUI='';
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ponyState = () => stable.ponies[chosen];
 const audio=new GameAudio(),celebration=new Celebration($('celebration'),{reducedMotion});
@@ -44,7 +46,7 @@ let world,room,paddock,lastBusy=null;
 $('mount').disabled=true;$('course-tab').disabled=true;$('paddock-tab').disabled=true;
 createPhotoWorld(canvas,{reducedMotion,onLost:()=>{if(game?.status==='playing')pause();$('webgl-error').hidden=false;}})
 .then(instance=>{world=instance;room=new StableRoom($('stable-room'),world.photos,{reducedMotion});
-  paddock=new PaddockRoom($('paddock-room'),world.photos,{audio,reducedMotion,onEnterBox:id=>{chosen=id;goHome();message('Bienvenue dans le box de '+ponies[id].name+' !');},onZone:name=>$('place-name').textContent=name.toUpperCase(),onReward:kind=>{
+  paddock=new PaddockRoom($('paddock-room'),world.photos,{audio,reducedMotion,onExit:()=>openCentre('paddock'),onEnterBox:id=>{chosen=id;goHome();message('Bienvenue dans le box de '+ponies[id].name+' !');},onZone:name=>$('place-name').textContent=name.toUpperCase(),onReward:kind=>{
     const pony=ponyState();pony.bond=Math.min(100,pony.bond+(kind==='ball'?3:6));if(kind==='lunge')pony.energy=Math.max(0,pony.energy-3);refreshStable();save();
   }});
   const available=Object.keys(world.photos.characters);$('character-picker').hidden=!available.length;
@@ -70,7 +72,7 @@ createPhotoWorld(canvas,{reducedMotion,onLost:()=>{if(game?.status==='playing')p
 .catch(error=>{console.error(error);$('asset-loading').hidden=true;$('webgl-error').hidden=false;$('entry-status').textContent='Le domaine n’a pas pu s’ouvrir. Réessaie dans un navigateur récent.';$('entry-retry').hidden=false;});
 $('entry-retry').addEventListener('click',()=>location.reload());
 function enterGame(id){
-  if(!world)return;audio.unlock();selectCharacter(id);$('entry-screen').hidden=true;document.querySelector('.page').inert=false;goHome();$('stable-tab').focus({preventScroll:true});
+  if(!world)return;audio.unlock();selectCharacter(id);$('entry-screen').hidden=true;document.querySelector('.page').inert=false;openCentre();$('centre-tab').focus({preventScroll:true});
 }
 for(const b of document.querySelectorAll('[data-entry-character]'))b.addEventListener('click',()=>enterGame(b.dataset.entryCharacter));
 $('entry-demo').addEventListener('click',()=>enterGame(stable.character));
@@ -78,6 +80,7 @@ $('change-character').addEventListener('click',()=>{if(isBusy())return;goHome();
 
 function save() {
   stable.chosen=chosen;
+  if(centre)stable.centre={doors:{...centre.doors},jobs:{...centre.jobs}};
   try {localStorage.setItem(SAVE_KEY,JSON.stringify(stable));$('save-note').textContent='✓ Ton écurie est sauvegardée ici. Ton poney t’attend quand tu t’absentes.';}
   catch {$('save-note').textContent='Tu peux jouer ! La sauvegarde est indisponible dans ce navigateur.';}
 }
@@ -117,8 +120,8 @@ function updateNavigation(){
   }else{$('next-target').textContent='Parcours terminé !';$('direction-hint').textContent='Une belle équipe ♡';}
   const map=$('minimap'),c=map.getContext('2d');c.clearRect(0,0,map.width,map.height);
   c.fillStyle='#fffaf0e8';c.beginPath();c.roundRect(0,0,220,160,12);c.fill();
-  const mx=x=>12+(x-BOUNDS.minX)/(BOUNDS.maxX-BOUNDS.minX)*196;
-  const mz=z=>12+(z-BOUNDS.minZ)/(BOUNDS.maxZ-BOUNDS.minZ)*136;
+  const bounds=state.bounds||BOUNDS,mx=x=>12+(x-bounds.minX)/(bounds.maxX-bounds.minX)*196;
+  const mz=z=>12+(z-bounds.minZ)/(bounds.maxZ-bounds.minZ)*136;
   c.strokeStyle='#ddd5ba';c.lineWidth=1;c.strokeRect(10,10,200,140);
   c.beginPath();c.moveTo(mx(walking?points[0].x:0),mz(walking?points[0].z:40));for(const gate of points)c.lineTo(mx(gate.x),mz(gate.z));c.strokeStyle='#c9bb8b';c.setLineDash([3,4]);c.stroke();c.setLineDash([]);
   const next=walking?state.nextWaypoint:state.next;
@@ -145,14 +148,15 @@ function show(panel) {
   for(const id of ['welcome','paused','result'])$(id).hidden=id!==panel;
 }
 function setView(next) {
-  view=next;document.body.classList.toggle('in-course',['course','trail'].includes(view));document.body.classList.toggle('in-paddock',view==='paddock');canvas.classList.toggle('in-stable',view==='stable');
+  view=next;document.body.classList.toggle('in-course',['course','trail'].includes(view));document.body.classList.toggle('in-paddock',view==='paddock');document.body.classList.toggle('in-centre',view==='centre');canvas.classList.toggle('in-stable',view==='stable');
   if(world)world.lastCourseView=false;releaseInputs();
   for(const id of ['stable-room','stable-bubble','stable-caption','box-tag'])$(id).hidden=view!=='stable';
   for(const id of ['ride-hud','ride-progress','navigation'])$(id).hidden=!['course','trail'].includes(view);
   $('course-panel').hidden=view!=='course';$('trail-panel').hidden=view!=='trail';
   $('paddock-room').hidden=view!=='paddock';
+  $('centre-ui').hidden=view!=='centre';$('trail-menu').hidden=true;$('travel-toolbar').hidden=view!=='trail';
   $('controls').hidden=true;$('pause').hidden=true;
-  for(const [id,selected] of [['stable-tab',view==='stable'],['course-tab',view==='course'],['paddock-tab',view==='paddock'],['trails-tab',view==='trail']]){
+  for(const [id,selected] of [['stable-tab',view==='stable'],['centre-tab',view==='centre'],['course-tab',view==='course'],['paddock-tab',view==='paddock'],['trails-tab',view==='trail']]){
     if(selected)$(id).setAttribute('aria-current','page');else $(id).removeAttribute('aria-current');
   }
   canvas.setAttribute('aria-label',view==='stable'?'Écurie interactive. Clique sur les objets pour les soins, puis installe tapis, selle et filet.':'Une carrière en 3D. Flèches gauche et droite pour tourner, flèche haute pour accélérer, flèche basse pour freiner. Espace pour sauter.');
@@ -195,13 +199,40 @@ function coursePreview() {
 }
 function trailPreview(id=trail){
   if(isBusy()||!world)return;if(game&&!game.settled)settleRide(stable,chosen,game);
-  trail=TRAILS[id]?id:'woodland';activity='trail';resetCelebration();game=createTrail(trail,pace,{character:stable.character,guided:$('trail-guided').checked});game.status='preview';setView('trail');lockChoices(false);refreshStable();refreshRide();
+  trail=TRAILS[id]?id:'woodland';activity='trail';resetCelebration();game=createTrail(trail,pace,{character:stable.character});game.status='preview';setView('trail');lockChoices(false);refreshStable();refreshRide();
   const config=TRAILS[trail],reason=rideReadiness(ponyState())||tackReadiness(ponyState());
+  $('trail-panel').hidden=true;
   $('course-title').textContent=config.name;$('place-name').textContent=config.name.toUpperCase();$('course-icon').textContent=config.icon;$('course-description').textContent=config.description;
-  $('course-help').textContent=$('trail-guided').checked?'Ton poney suit le chemin. Choisis ton allure et profite du paysage.':'Flèches pour te promener librement. Suis les repères pour terminer la balade.';
+  $('course-help').textContent='Maintiens ↑ pour avancer, relâche pour t’arrêter. ← → pour tourner. '+(id==='seaside'?'Tu peux entrer doucement dans la mer et te baigner.':'Promène-toi à ton rythme sur le chemin.');
   $('duration').textContent='Balade sans élimination · pas, trot ou galop';$('start').textContent=reason?'Préparer et partir ! →':'Partir en balade ! →';$('ride-preparation').hidden=!reason;$('ride-preparation').textContent=reason?reason+' La préparation peut être faite pour toi.':'';$('prepare-stable').hidden=!reason;show('welcome');$('start').focus({preventScroll:true});
   for(const b of document.querySelectorAll('[data-trail]'))b.classList.toggle('active',b.dataset.trail===trail);
   if(matchMedia('(max-width:700px)').matches)$('scene').scrollIntoView({block:'center'});
+}
+function openTrailMenu(){
+  if(isBusy()||!world)return;if(game&&!game.settled)settleRide(stable,chosen,game);game=createTrail(trail);game.status='preview';activity='trail';resetCelebration();setView('trail');show(null);lockChoices(false);$('trail-panel').hidden=true;$('travel-toolbar').hidden=true;$('ride-hud').hidden=true;$('navigation').hidden=true;$('ride-progress').hidden=true;$('trail-menu').hidden=false;$('place-name').textContent='LES TROIS BALADES';save();
+}
+function openCentre(from='yard'){
+  if(!world||isBusy())return;goHome();centre ||= createCentre({age:CHARACTERS[stable.character].age,progress:stable.centre});centre.status='playing';centre.walkSpeed=stable.character==='emmy'?1.8:2.1;
+  centre.target=null;centre.path=[];centre.pending=null;
+  if(from==='paddock'){Object.assign(centre.player,{x:23,z:15,heading:Math.PI/2,speed:0});centre.target=null;centre.path=[];}
+  if(from==='box'){const b=BOXES.find(b=>b.pony===chosen);if(b){centre.doors[b.id]=true;Object.assign(centre.player,{x:b.side*5.7,z:b.z+1.6,heading:b.side*Math.PI/2,speed:0});}}
+  setView('centre');show(null);lastCentreUI='';$('place-name').textContent='LE CENTRE ÉQUESTRE';$('centre-pause').textContent='Pause';audio.unlock();updateCentreUI();save();
+  if(matchMedia('(max-width:700px)').matches)$('scene').scrollIntoView({block:'center'});
+}
+function centreEvents(events){
+  if(!events.length)return;
+  for(const event of events){
+    if(event.type==='care'){chosen=event.pony;goHome();message('Tu es auprès de '+ponies[chosen].name+'. Les soins sont à portée de main.');}
+    else if(event.type==='paddock')$('paddock-tab').click();
+    else if(event.type==='rides')openTrailMenu();
+    else if(event.type==='job'){
+      const p=stable.ponies[event.pony];if(event.action==='hay'){p.food=Math.min(100,p.food+15);notify('Du foin tout frais pour '+ponies[event.pony].name+' !');}else if(event.action==='water'){p.bond=Math.min(100,p.bond+5);notify('L’abreuvoir est rempli d’eau fraîche.');}else{p.clean=Math.min(100,p.clean+15);notify('Un box propre et une paille toute fraîche !');}refreshStable();
+    }else if(event.type==='tack')notify('La sellerie : tapis, selles et filets sont rangés ici.');else if(event.type==='groom')notify('L’aire de pansage est prête pour vos prochains soins.');
+  }save();
+}
+function updateCentreUI(){
+  if(!centre)return;const item=nearestCentreInteraction(centre),close=item?.distance<=3,busy=centre.actionUntil>centre.time,key=[item?.id,item?.label,close,busy,centre.status,Object.keys(centre.jobs).length].join(':');if(key===lastCentreUI)return;lastCentreUI=key;
+  $('centre-interact').disabled=!close||busy||centre.status!=='playing';$('centre-interact').textContent=busy?'Ton geste se termine…':close?item.label:'Approche-toi d’une porte ou d’un objet';$('centre-jobs').textContent=Object.keys(centre.jobs).length+' petites attentions aujourd’hui ♡';
 }
 function goHome() {
   releaseInputs();
@@ -213,10 +244,10 @@ function goHome() {
 }
 function start() {
   prepareForRide(ponyState());refreshStable();save();
-  audio.unlock();resetCelebration();releaseInputs();game=activity==='trail'?createTrail(trail,pace,{character:stable.character,guided:$('trail-guided').checked}):createGame(pace,course,{countdown:true,character:stable.character});game.status='countdown';game.countdown=3;last=0;show(null);refreshRide();lockChoices(true);
+  audio.unlock();resetCelebration();releaseInputs();game=activity==='trail'?createTrail(trail,pace,{character:stable.character}):createGame(pace,course,{countdown:true,character:stable.character});game.status='countdown';game.countdown=3;last=0;show(null);refreshRide();lockChoices(true);
   $('course-panel').hidden=true;$('trail-panel').hidden=true;$('controls').hidden=false;$('pause').hidden=false;$('jump').disabled=true;
   document.querySelector('.steering').hidden=game.autoSteer;$('reposition').hidden=game.autoSteer||activity==='trail';
-  $('control-caption').innerHTML='<p><strong>'+ (game.autoSteer?'Ton poney tient le chemin':'À toi de tenir les rênes !')+'</strong><span>'+(game.autoSteer?'Espace pour sauter · choisis ton allure':'Flèches pour diriger · Espace pour sauter')+'</span></p>';
+  $('control-caption').innerHTML='<p><strong>'+ (game.autoSteer?'Ton poney tient le chemin':'À toi de tenir les rênes !')+'</strong><span>'+(game.activity==='trail'?'↑ maintenue pour avancer · relâche pour t’arrêter · ← → tourner':game.autoSteer?'Espace pour sauter · choisis ton allure':'Flèches pour diriger · Espace pour sauter')+'</span></p>';
   $('countdown').hidden=false;$('countdown-number').textContent='3';audio.countdown(3);
   $('pause').textContent='Pause';$('pause').setAttribute('aria-label','Mettre en pause');
   for(const b of document.querySelectorAll('[data-live-pace]'))b.setAttribute('aria-pressed',b.dataset.livePace===pace);
@@ -309,8 +340,17 @@ for(const button of document.querySelectorAll('[data-live-pace]'))button.addEven
   notify(pace==='gallop'?'Au galop !':pace==='trot'?'Au trot !':'Au pas, tranquillement.');
 });
 for(const b of document.querySelectorAll('[data-trail]'))b.addEventListener('click',()=>trailPreview(b.dataset.trail));
-$('trails-tab').addEventListener('click',()=>{if(game&&['playing','countdown','paused'].includes(game.status)&&view==='trail')return;trailPreview();});
-$('trail-guided').addEventListener('change',()=>trailPreview());
+$('trails-tab').addEventListener('click',openTrailMenu);
+$('change-trail').addEventListener('click',openTrailMenu);$('trail-to-centre').addEventListener('click',()=>openCentre());
+$('centre-tab').addEventListener('click',()=>openCentre());$('leave-box').addEventListener('click',()=>openCentre('box'));
+$('centre-to-paddock').addEventListener('click',()=>$('paddock-tab').click());
+$('centre-interact').addEventListener('click',()=>{if(centre)centreEvents(interactCentre(centre));lastCentreUI='';updateCentreUI();});
+$('centre-pause').addEventListener('click',()=>{if(!centre)return;centre.status=centre.status==='playing'?'paused':'playing';releaseInputs();$('centre-pause').textContent=centre.status==='paused'?'Reprendre':'Pause';lastCentreUI='';updateCentreUI();});
+for(const b of document.querySelectorAll('[data-centre-go]'))b.addEventListener('click',()=>{if(!centre)return;const [x,z]=b.dataset.centreGo.split(',').map(Number);walkCentreTo(centre,x,z);});
+for(const b of document.querySelectorAll('[data-centre-input]')){
+  b.addEventListener('pointerdown',e=>{if(centre?.status!=='playing')return;e.preventDefault();b.setPointerCapture(e.pointerId);touchKeys.add(b.dataset.centreInput);});
+  for(const name of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(name,()=>touchKeys.delete(b.dataset.centreInput));
+}
 for(const button of document.querySelectorAll('[data-course]'))button.addEventListener('click',()=>{
   course=button.dataset.course;
   for(const b of document.querySelectorAll('[data-course]')){b.classList.toggle('active',b===button);b.setAttribute('aria-pressed',b===button);}
@@ -335,7 +375,21 @@ $('prepare-stable').addEventListener('click',()=>{
 });
 $('pause').addEventListener('click',pause);$('resume').addEventListener('click',pause);
 $('jump').addEventListener('click',()=>{if(game)jump(game);});
-canvas.addEventListener('pointerdown',()=>{if(['course','trail'].includes(view)&&game)jump(game);});
+canvas.addEventListener('pointerdown',event=>{
+  if(event.button!==0)return;
+  if(view==='course'&&game)jump(game);
+  if(view==='centre'&&centre?.status==='playing'){
+    const point=world.centreGroundPoint(event.clientX,event.clientY);if(!point)return;
+    const picked=nearestCentreInteraction({...centre,player:point});
+    if(picked.distance<1.3){const distance=Math.hypot(centre.player.x-picked.x,centre.player.z-picked.z);if(distance<3){centreEvents(interactCentre(centre,{...picked,distance}));}else{const door=picked.id.startsWith('door:');walkCentreTo(centre,door?Math.sign(picked.x)*2.1:picked.x,picked.z);centre.pending=picked;}}
+    else walkCentreTo(centre,point.x,point.z);
+  }
+});
+let orbitDrag=null;
+canvas.addEventListener('contextmenu',e=>{if(view==='centre')e.preventDefault();});
+canvas.addEventListener('pointerdown',e=>{if(view==='centre'&&e.button===2){e.preventDefault();canvas.setPointerCapture(e.pointerId);orbitDrag={x:e.clientX,y:e.clientY};}});
+canvas.addEventListener('pointermove',e=>{if(!orbitDrag||view!=='centre'||!centre)return;centre.cameraYaw=(centre.cameraYaw||0)+(e.clientX-orbitDrag.x)*.009;centre.cameraHeight=Math.max(1.6,Math.min(4.1,(centre.cameraHeight||2.2)+(e.clientY-orbitDrag.y)*.012));orbitDrag={x:e.clientX,y:e.clientY};});
+for(const name of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(name,()=>orbitDrag=null);
 const arrowKeys={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'};
 window.addEventListener('keydown',event=>{
   if(!$('entry-screen').hidden){
@@ -351,6 +405,11 @@ window.addEventListener('keydown',event=>{
     if(event.code==='Escape'){event.preventDefault();$('paddock-pause').click();}
     return;
   }
+  if(view==='centre'){
+    if(arrowKeys[event.code]){event.preventDefault();heldKeys.add(arrowKeys[event.code]);}
+    if(event.code==='KeyE'&&!event.repeat){event.preventDefault();$('centre-interact').click();}
+    if(event.code==='Escape'&&!event.repeat){event.preventDefault();$('centre-pause').click();}return;
+  }
   if(game&&['playing','countdown'].includes(game.status)){
     if(arrowKeys[event.code]){event.preventDefault();heldKeys.add(arrowKeys[event.code]);}
     if(event.code==='Space'){
@@ -361,7 +420,7 @@ window.addEventListener('keydown',event=>{
   if(event.code==='Escape'&&game&&['playing','countdown','paused'].includes(game.status)){event.preventDefault();pause();}
 });
 window.addEventListener('keyup',event=>{if(arrowKeys[event.code])heldKeys.delete(arrowKeys[event.code]);});
-window.addEventListener('blur',()=>{releaseInputs();if(game&&['playing','countdown'].includes(game.status))pause();if(view==='paddock'&&paddock.state.status==='playing'){$('paddock-pause').click();}});
+window.addEventListener('blur',()=>{releaseInputs();if(game&&['playing','countdown'].includes(game.status))pause();if(view==='paddock'&&paddock.state.status==='playing'){$('paddock-pause').click();}if(view==='centre'&&centre?.status==='playing')$('centre-pause').click();});
 for(const button of document.querySelectorAll('[data-input]')){
   button.addEventListener('pointerdown',event=>{
     if(!game||!['playing','countdown'].includes(game.status))return;event.preventDefault();button.setPointerCapture(event.pointerId);touchKeys.add(button.dataset.input);button.classList.add('held');
@@ -379,7 +438,7 @@ document.addEventListener('fullscreenchange',()=>{
   if(document.fullscreenElement===$('adventure'))$('adventure').append($('controls'));
   else document.querySelector('.main-column').append($('controls'));
 });
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)return;audio.stop();if(game&&['playing','countdown'].includes(game.status))pause();if(view==='paddock'&&paddock.state.status==='playing')$('paddock-pause').click();});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)return;audio.stop();if(game&&['playing','countdown'].includes(game.status))pause();if(view==='paddock'&&paddock.state.status==='playing')$('paddock-pause').click();if(view==='centre'&&centre?.status==='playing')$('centre-pause').click();});
 // Preserve the effort already made if the page is closed during a course.
 window.addEventListener('pagehide',()=>{if(game&&!game.settled){settleRide(stable,chosen,game);save();}});
 window.addEventListener('pageshow',event=>{if(event.persisted)goHome();});
@@ -395,6 +454,7 @@ function frame(now){
     if(events.length||now-lastHudAt>=80){refreshRide();lastHudAt=now;}
     if(events.includes('finish')||events.includes('lose'))finish();
     if(game.status==='playing')audio.step(game.jumpActive?0:game.speed,dt);
+    if(game.activity==='trail'){$('water-status').textContent=game.swimming?'♡ Baignade avec ton poney':game.waterDepth>.1?'Les sabots dans l’eau':'';audio.ambience(game.theme,dt,game.waterDepth>.1);}
   }
   const counting=game?.status==='countdown',hideCountdown=!(counting||game?.status==='playing'&&now<startFlashUntil);
   if($('countdown').hidden!==hideCountdown)$('countdown').hidden=hideCountdown;
@@ -408,6 +468,7 @@ function frame(now){
   updateActionUI(now);
   if(view==='stable'&&room)room.render(ponyState(),activeEffect,now);
   else if(view==='paddock'&&paddock){if($('entry-screen').hidden)paddock.step(dt,inputState());paddock.render(now);}
+  else if(view==='centre'&&centre&&world){centreEvents(advanceCentre(centre,dt,inputState()));const location=world.renderCentre(centre,stable.character,centre.status==='playing'?dt:0);if(location&&$('centre-location').textContent!==location)$('centre-location').textContent=location;updateCentreUI();}
   else if(world)world.render(view,game,ponies[chosen],ponyState(),activeEffect,clock,dt,course);
   requestAnimationFrame(frame);
 }

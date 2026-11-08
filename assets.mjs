@@ -19,6 +19,7 @@ export const PHOTO_URLS = {
   ponyFree: './assets/pony-free.webp',
   demoPaddock: './assets/demo-paddock.webp',
   playBall: './assets/play-ball.webp',
+  oceanWater:'./assets/ocean-water.webp',stableProps:'./assets/stable-props.webp',whiteFree:'./assets/white-free.webp',worldTextures:'./assets/world-textures.webp',
   ponyRest:'./assets/pony-rest.webp',unicornFree:'./assets/unicorn-free.webp',ponyGallop:'./assets/pony-gallop.webp',
   stableYard:'./assets/stable-yard.webp',stableCorridor:'./assets/stable-corridor.webp',seaSky:'./assets/sea-sky.webp'
 };

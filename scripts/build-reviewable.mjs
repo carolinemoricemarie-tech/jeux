@@ -23,16 +23,17 @@ const embed=async file=>{
 };
 const manifest=JSON.parse(await readFile(path.join(root,'assets/private/manifest.json'),'utf8'));
 const images={photos:{},characters:{}};
-const replaced=new Set(['horse','jump','careBrush','careHay','careCarrot','carePet','equipPad','equipSaddle','equipBridle','demoPaddock']);
+const replaced=new Set(['horse','jump','careBrush','careHay','careCarrot','carePet','equipPad','equipSaddle','equipBridle']);
 for(const [name,file] of Object.entries(PHOTO_URLS))if(!replaced.has(name))images.photos[name]=await embed(file);
 images.photos.characterPortraits=await embed(manifest.portraits);
 for(const [id,group] of Object.entries(manifest.characters)){
-  images.characters[id]={};for(const [name,file] of Object.entries(group))images.characters[id][name]=await embed(file);
+  images.characters[id]={};for(const [name,file] of Object.entries(group))if(!name.endsWith('Mask'))images.characters[id][name]=await embed(file);
 }
 if(Object.keys(images.characters).join(',')!=='emmy,louane')throw Error('Both family characters are required.');
 for(const [id,group] of Object.entries(images.characters))for(const clip of ['careHay','careCarrot','careBrush','carePet','equipPad','equipSaddle','equipBridle','careIdle']){
-  if(!group[clip]||!group[clip+'Mask'])throw Error('Missing character image or person mask: '+id+'/'+clip);
+  if(!group[clip])throw Error('Missing character image: '+id+'/'+clip);
 }
+for(const [id,group] of Object.entries(images.characters))for(const name of ['whiteCare','unicornCare','whiteRear','walkDirections'])if(!group[name])throw Error('Native image missing: '+id+'/'+name);
 const json=JSON.stringify(images),salt=randomBytes(16),iv=randomBytes(12);
 const cipher=createCipheriv('aes-256-gcm',pbkdf2Sync(code,salt,600000,32,'sha256'),iv);
 const encrypted=Buffer.concat([cipher.update(gzipSync(json)),cipher.final(),cipher.getAuthTag()]);
@@ -50,7 +51,7 @@ html=html.replace('<script type="module" src="game.mjs"></script>','<script type
 await writeFile(path.join(output,'JOUER.html'),html);
 await writeFile(path.join(output,'style.css'),await readFile(path.join(root,'style.css'),'utf8')+'\n#family-unlock-form{display:grid;gap:12px;margin:24px auto;max-width:430px}#family-unlock-form label{text-align:left;font-size:14px}#family-code{font:17px monospace;width:100%;padding:14px;border:1px solid #9fae98;border-radius:10px;background:#fffef8}\n');
 await copyFile(path.join(root,'vendor/THREE-LICENSE.txt'),path.join(output,'LICENCE-THREE.txt'));
-await writeFile(path.join(output,'LIRE-MOI.txt'),'LES CRINS MAGIQUES — VERSION FAMILIALE\n\nExtraire tout le ZIP dans un dossier, puis ouvrir JOUER.html dans Chrome ou Edge récent. Aucune installation ni connexion nécessaire. Garder les fichiers ensemble.\n\nLe code d’accès est communiqué séparément. Les images privées sont chiffrées ; le code du jeu est lisible dans game.js et unlock.js. Aucun programme Windows, installateur ou téléchargement externe.\n\nUne précédente édition a été signalée par Microsoft Defender. Le nouveau format conserve le code lisible et ne chiffre que les images. Cette édition n’a pas été analysée par Microsoft Defender. Garder l’antivirus activé et ne pas ignorer une alerte : conserver le nom exact de la détection pour analyse.\n');
+await writeFile(path.join(output,'LIRE-MOI.txt'),'LES CRINS MAGIQUES — VERSION FAMILIALE\n\nExtraire tout le ZIP dans un dossier, puis ouvrir JOUER.html dans Chrome ou Edge récent. Aucune installation ni connexion nécessaire. Garder les fichiers ensemble.\n\nNOUVEAUTÉS : Nuage blanc et licorne rose/blanche avec leurs propres images ; sortie directe de l’enclos ; centre à pied avec six boxes ouvrants, sellerie et soins ; balades forêt, mer et campagne entièrement pilotées. Sur la plage, avancer vers l’eau pour se baigner.\n\nCOMMANDES : flèches pour marcher au centre ; clic sur le sol pour se déplacer ; E pour une action proche ; clic droit et glisser pour regarder. En balade, maintenir la flèche haut pour avancer, relâcher pour arrêter, gauche/droite pour tourner ; choisir le pas, le trot ou le galop. Boutons Changer de balade et Rentrer au centre dans la scène.\n\nLe code d’accès est communiqué séparément. Les images privées sont chiffrées ; le code du jeu est lisible dans game.js et unlock.js. Aucun programme Windows, installateur ou téléchargement externe.\n\nUne précédente édition a été signalée par Microsoft Defender. Le nouveau format conserve le code lisible et ne chiffre que les images. Cette édition n’a pas été analysée par Microsoft Defender. Garder l’antivirus activé et ne pas ignorer une alerte : conserver le nom exact de la détection pour analyse.\n');
 const audit={format:'readable-code-encrypted-images-only',created:new Date().toISOString(),images:Object.values(images.characters).reduce((n,v)=>n+Object.keys(v).length,0)+Object.keys(images.photos).length,imagePayloadSha256:createHash('sha256').update(json).digest('hex'),gameSha256:createHash('sha256').update(bundled.outputFiles[0].text).digest('hex'),privateCodeIncluded:false,externalRequestsRequired:false,antivirusScan:'not available; previous Microsoft Defender severe detection unresolved',publication:release?'encrypted-images delivery':'local only'};
 await writeFile(path.join(output,'verification.json'),JSON.stringify(audit,null,2));
 console.log(JSON.stringify({output,images:audit.images,payloadBytes:encrypted.length,codeBytes:bundled.outputFiles[0].contents.length,publication:audit.publication}));

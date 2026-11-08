@@ -1,7 +1,8 @@
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function spline(points,u){
   const i=Math.min(points.length-2,Math.max(0,Math.floor(u))),t=clamp(u-i,0,1);
-  const a=points[Math.max(0,i-1)],b=points[i],c=points[i+1],d=points[Math.min(points.length-1,i+2)];
+  const closed=points.length>3&&points[0].x===points.at(-1).x&&points[0].z===points.at(-1).z;
+  const a=points[i-1]||(closed?points.at(-2):points[0]),b=points[i],c=points[i+1],d=points[i+2]||(closed?points[1]:points.at(-1));
   const value=key=>{
     const m=(c[key]-a[key])*.5,n=(d[key]-b[key])*.5;
     return {p:(2*t*t*t-3*t*t+1)*b[key]+(t*t*t-2*t*t+t)*m+(-2*t*t*t+3*t*t)*c[key]+(t*t*t-t*t)*n,

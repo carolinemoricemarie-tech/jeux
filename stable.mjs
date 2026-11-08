@@ -16,7 +16,7 @@ export const ACTIONS = {
 const clamp = n => Math.min(100, Math.max(0, n));
 export function createStable() {
   return { version: 1, challengeVersion: 4, chosen: 'noisette', character: 'emmy', ponies: Object.fromEntries(PONY_IDS.map(id =>
-    [id, { food: 58, clean: 44, energy: 78, bond: 48, resting:false, tack: { pad: false, saddle: false, bridle: false } }])), rides: 0, walks:0, stars: 0, records: {} };
+    [id, { food: 58, clean: 44, energy: 78, bond: 48, resting:false, tack: { pad: false, saddle: false, bridle: false } }])), rides: 0, walks:0, stars: 0, records: {},centre:{doors:{},jobs:{}} };
 }
 export function restoreStable(raw) {
   const fresh = createStable();
@@ -24,6 +24,8 @@ export function restoreStable(raw) {
     const parsed = JSON.parse(raw);
     if (parsed?.version !== 1) return fresh;
     fresh.character = validCharacter(parsed.character);
+    for(const id of ['box0','box1','box2','box3','box4','box5','sellerie'])if(parsed.centre?.doors?.[id]===true)fresh.centre.doors[id]=true;
+    for(const type of ['water','hay','clean'])for(const id of ['box0','box1','box2'])if(parsed.centre?.jobs?.[type+':'+id]===true)fresh.centre.jobs[type+':'+id]=true;
     if(parsed.chosen==='caramel')parsed.chosen='etoile';
     if(parsed.ponies?.caramel&&!parsed.ponies.etoile)parsed.ponies.etoile=parsed.ponies.caramel;
     if (PONY_IDS.includes(parsed.chosen)) fresh.chosen = parsed.chosen;

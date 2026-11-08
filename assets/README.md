@@ -45,6 +45,15 @@ Nouveaux visuels photoréalistes générés, sans visage familial dans ce dossie
 - `stable-yard.webp` et `stable-corridor.webp` : cour et allée des boxes, avec des zones de marche et des portes interactives.
 - `sea-sky.webp` : panorama marin utilisé dans la balade sur la plage.
 
-Les deux atlas montés de la licorne restent dans `assets/private/`. Les vues montées habituelles et les séquences de soins sont recolorées à l’exécution pour Nuage et Étoile ; les masques préservent les personnages. La licorne emploie des visuels spécifiques dans l’enclos, au repos et en selle. Les décors de balade combinent textures photographiques, arbres détourés, chemin 3D et mer animée. Ces éléments restent des images animées sur des plans, et non des personnages articulés en 3D.
+Les atlas montés de la licorne et de Nuage restent dans `assets/private/`. Les nouveaux atlas `whiteCare` et `unicornCare` contiennent chacun seize poses dédiées aux soins et à l’équipement, pour chaque cavalière. Nuage a son propre atlas `whiteRear` et les deux enfants ont des atlas `walkDirections` avec des vues avant, arrière et de profil. Les recolorations et les masques de peau de l’ancienne édition ne sont plus utilisés ni distribués.
 
-Les masques de protection des personnages sont calculés localement avec DeepLabV3 MobileNetV3 (classe personne VOC), à partir des images générées. Ils restent privés et sont embarqués avec les images chiffrées. Le modèle, ses dépendances et ses poids ne sont pas distribués avec le jeu ; aucune segmentation ni requête distante ne s’exécute pendant la partie. `scripts/prepare-family-masks.py` permet de reconstruire ces masques.
+## Centre et balades libres
+
+- `white-free.webp` : seize poses photographiques originales de Nuage blanc, quatre directions.
+- `stable-props.webp` : huit objets détourés, grille 4 × 2 : foin, selle, filet, brosse, carottes, seau, tapis et brouette.
+- `world-textures.webp` : quatre textures de sol, grille 2 × 2 : sous-bois, chemin de terre, pierre et sable.
+- `ocean-water.webp` : texture photographique de vaguelettes, animée avec la géométrie et les normales de la mer.
+
+Le centre utilise des murs, cloisons, portes de boxes articulées, fenêtres, planchers, toitures et étagères en 3D. Les canopées photographiques et les troncs sont affichés par groupes pour garder la fluidité. Les personnages et poneys restent des images animées sur des plans, et non des modèles anatomiques entièrement articulés en 3D.
+
+Les PNG sources générés restent dans l’espace de création. Les nouvelles copies WebP sources sont sans perte. Pour le ZIP familial, les copies optimisées conservent les dimensions, la transparence à l’identique et une qualité WebP de 96 ; le jeu n’applique aucun filtre de couleur aux poneys. Aucun calcul de segmentation, génération d’image ou service distant n’est nécessaire pendant le jeu.

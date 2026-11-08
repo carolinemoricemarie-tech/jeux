@@ -17,18 +17,18 @@ const result=await build({
       const urls={},characters={};
       const replaced=new Set(['horse','jump','careBrush','careHay','careCarrot','carePet','equipPad','equipSaddle','equipBridle']);
       for(const [key,file] of Object.entries(PHOTO_URLS)){
-        if(family&&(replaced.has(key)||key==='demoPaddock'))continue;
+        if(family&&(replaced.has(key)))continue;
         urls[key]=await embed(file);
       }
       if(family){
         const manifest=JSON.parse(await readFile(path.join(root,'assets/private/manifest.json'),'utf8'));
         for(const [id,images] of Object.entries(manifest.characters)){
           characters[id]={};
-          for(const [key,file] of Object.entries(images))characters[id][key]=await embed(file);
+          for(const [key,file] of Object.entries(images))if(!key.endsWith('Mask'))characters[id][key]=await embed(file);
         }
         urls.characterPortraits=await embed(manifest.portraits);
         if(Object.keys(characters).join(',')!=='emmy,louane')throw new Error('Les deux cavalières sont requises.');
-        const expected=[...replaced,'paddock','courseRear','paddockMotion','careIdle','unicornRear',...['careHay','careCarrot','careBrush','carePet','equipPad','equipSaddle','equipBridle','careIdle'].map(clip=>clip+'Mask')];
+        const expected=[...replaced,'paddock','courseRear','paddockMotion','careIdle','unicornRear','whiteCare','unicornCare','whiteRear','walkDirections'];
         for(const [id,images] of Object.entries(characters))for(const key of expected)if(!images[key])throw new Error('Visuel manquant : '+id+'/'+key);
       }
       return {contents:'export const PHOTO_URLS='+JSON.stringify(urls)+'; export const CHARACTER_URLS='+JSON.stringify(characters)+';',loader:'js'};

@@ -1,8 +1,9 @@
 import { actionPose, ease } from './stable-motion.mjs';
 import { idlePose } from './animation.mjs';
-import {PONIES,coatImage} from './ponies.mjs';
+import {PONIES} from './ponies.mjs';
 import {actorAtlas,drawActor} from './actor-atlas.mjs';
 import {walkingPose,clamp} from './animation.mjs';
+import {cyclePose,detailPose} from './animation.mjs';
 const CLIPS={hay:'careHay',carrot:'careCarrot',brush:'careBrush',pet:'carePet',rest:'carePet',pad:'equipPad',saddle:'equipSaddle',bridle:'equipBridle'};
 const DESCRIPTIONS={hay:'donne du foin au poney',carrot:'donne une carotte au poney',brush:'brosse le poney',pet:'caresse le poney',rest:'se repose avec son poney',pad:'installe le tapis',saddle:'installe la selle sur le tapis',bridle:'met le filet au poney'};
 const surface=()=>{const c=document.createElement('canvas');c.width=1200;c.height=800;return c;};
@@ -58,14 +59,18 @@ export class StableRoom {
     const profile=this.profiles.get(this.character||'demo'),image=profile.photos[clip],b=profile.bounds[clip];
     if(!image||!b)return;
     const origin=b.poses[index];ctx.globalAlpha=alpha;
-    const pony=PONIES[this.ponyId],colored=coatImage(image,pony.kind,true,profile.photos[clip+'Mask']);
-    ctx.drawImage(colored,index%b.columns*image.width/b.columns,Math.floor(index/b.columns)*image.height/2,b.w,b.h,origin.dx,origin.dy,b.w*b.scale,b.h*b.scale);
-    if(pony.kind==='unicorn'&&origin.star){
-      const x=origin.dx+(origin.star.x-9)*b.scale,y=origin.dy+(origin.star.y-18)*b.scale,size=50*b.scale;
-      ctx.save();ctx.translate(x,y);ctx.rotate(.18);const gold=ctx.createLinearGradient(-7,0,8,0);gold.addColorStop(0,'#a88659');gold.addColorStop(.45,'#fff5d7');gold.addColorStop(1,'#d2af72');ctx.fillStyle=gold;
-      ctx.beginPath();ctx.moveTo(-7,0);ctx.quadraticCurveTo(-3,-size*.55,4,-size);ctx.quadraticCurveTo(8,-size*.4,8,0);ctx.closePath();ctx.fill();ctx.strokeStyle='#ad8c5866';ctx.lineWidth=1.1;
-      for(let n=1;n<6;n++){ctx.beginPath();ctx.moveTo(-5+n*.9,-n*size/7);ctx.lineTo(7-n*.6,-n*size/7-4);ctx.stroke();}ctx.restore();
-    }
+    ctx.drawImage(image,index%b.columns*image.width/b.columns,Math.floor(index/b.columns)*image.height/2,b.w,b.h,origin.dx,origin.dy,b.w*b.scale,b.h*b.scale);
+  }
+  drawNative(pony,effect,now,image){
+    const frames={hay:[0,2,3,3],carrot:[0,4,5,5],brush:[6,7,6,7],pet:[0,8,9,9],pad:[0,10,11,11],saddle:[11,12,13,13],bridle:[13,14,15,15]},active=effect&&now<effect.until;
+    let pose;
+    if(active){const p=actionPose(effect.action,(now-effect.started)/(effect.until-effect.started),this.reducedMotion),path=frames[effect.action]||frames.pet;pose={from:path[p.from],to:path[p.to],mix:p.mix};this.nativeHeld={pony:this.ponyId,image,pose:{from:path.at(-1),to:path.at(-1),mix:0},until:effect.until+1500};}
+    else if(pony.tack?.bridle)pose={from:15,to:15,mix:0};else if(pony.tack?.saddle)pose={from:13,to:13,mix:0};else if(pony.tack?.pad)pose={from:11,to:11,mix:0};
+    else if(this.nativeHeld?.pony===this.ponyId&&this.nativeHeld.image===image&&now<this.nativeHeld.until)pose=this.nativeHeld.pose;
+    else pose=this.reducedMotion?{from:0,to:0,mix:0}:detailPose(cyclePose(now/7000,2));
+    this.ctx.clearRect(0,0,1200,800);drawActor(this.ctx,actorAtlas(image,4,4),pose,620,704,530,{breath:this.reducedMotion?0:Math.sin(now*.0018)*.0015});
+    this.canvas.dataset.clip=active?CLIPS[effect.action]:pony.tack?.bridle?'equipBridle':pony.tack?.saddle?'equipSaddle':pony.tack?.pad?'equipPad':'careIdle';this.canvas.dataset.frame=String(pose.from);this.canvas.dataset.nativeCoat=PONIES[this.ponyId].kind;
+    this.canvas.setAttribute('aria-label',(this.name||'La cavalière')+' et '+PONIES[this.ponyId].name+(active?' : '+DESCRIPTIONS[effect.action]:', dans leur box.'));
   }
   drawRest(pony,effect,now,progress){
     const c=this.ctx,id=PONIES[this.ponyId].row,index=progress*3,from=Math.floor(index),to=Math.min(3,from+1),mix=ease(index-from);
@@ -86,6 +91,8 @@ export class StableRoom {
     if(pony.resting){this.wasResting=true;this.wakingAt=null;const progress=effect?.action==='rest'?ease(clamp(((now-effect.started)/(effect.until-effect.started)-.18)/.82)):1;this.drawRest(pony,effect,now,progress);return;}
     if(this.wasResting){this.wasResting=false;this.wakingAt=now;}
     if(this.wakingAt!==null&&this.wakingAt!==undefined&&now-this.wakingAt<1400){this.drawRest(pony,null,now,1-ease((now-this.wakingAt)/1400));return;}
+    const native=PONIES[this.ponyId].kind==='white'?this.photos.characters?.[this.character]?.whiteCare:PONIES[this.ponyId].kind==='unicorn'?this.photos.characters?.[this.character]?.unicornCare:null;
+    if(native){this.drawNative(pony,effect,now,native);return;}
     let clip,pose;
     if(active){
       clip=CLIPS[effect.action];pose=actionPose(effect.action,(now-effect.started)/(effect.until-effect.started),this.reducedMotion);

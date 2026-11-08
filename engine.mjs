@@ -1,4 +1,5 @@
 import { createRail,railPoint } from './guidance.mjs';
+import {TRAIL_SPEEDS,waterDepth} from './terrain.mjs';
 export const MAX_MISSES = 3;
 export const PACES={gentle:{cruise:4.8,max:9},trot:{cruise:6.5,max:11},gallop:{cruise:8.5,max:13}};
 export function ridingRules(character,course){return {maxMisses:character==='emmy'?null:MAX_MISSES,autoSteer:character==='emmy'&&COURSES[course]?.level==='beginner'};}
@@ -64,7 +65,7 @@ export function createGame(pace='gentle', course='prairie', {countdown=false,cha
 }
 function PACEsValid(pace){return Object.hasOwn(PACES,pace)?pace:'gentle';}
 export function jump(game) {
-  if(game.status!=='playing'||game.jumpActive||game.height>0||game.velocity!==0)return false;
+  if(game.status!=='playing'||game.jumpActive||game.height>0||game.velocity!==0||game.swimming)return false;
   game.jumpActive=true;game.jumpTime=0;return true;
 }
 export function localToGate(gate,x,z) {
@@ -99,7 +100,8 @@ export function advance(game,dt,input={}) {
     const step=Math.min(remaining,1/120);remaining-=step;game.time+=step;
     game.edgeCooldown=Math.max(0,game.edgeCooldown-step);
     const pace=PACES[game.pace]||PACES.gentle;
-    const targetSpeed=game.autoSteer?pace.cruise:input.down?0:input.up?pace.max:pace.cruise;
+    let targetSpeed=game.manualThrottle?(input.up&&!input.down?(TRAIL_SPEEDS[game.pace]||TRAIL_SPEEDS.gentle):0):game.autoSteer?pace.cruise:input.down?0:input.up?pace.max:pace.cruise;
+    if(game.activity==='trail'){game.waterDepth=waterDepth(game.theme,game.x,game.z);game.swimming=game.waterDepth>.85;if(game.waterDepth>.15)targetSpeed*=game.swimming?.42:.72;}
     const acceleration=targetSpeed<game.speed?10:4;
     game.speed+=Math.sign(targetSpeed-game.speed)*Math.min(Math.abs(targetSpeed-game.speed),acceleration*step);
     const previous={x:game.x,z:game.z};
@@ -110,9 +112,14 @@ export function advance(game,dt,input={}) {
       game.heading=Math.atan2(Math.sin(game.heading),Math.cos(game.heading));
       game.x-=Math.sin(game.heading)*game.speed*step;game.z-=Math.cos(game.heading)*game.speed*step;
     }
-    if(game.x<BOUNDS.minX||game.x>BOUNDS.maxX||game.z<BOUNDS.minZ||game.z>BOUNDS.maxZ){
-      game.x=Math.max(BOUNDS.minX,Math.min(BOUNDS.maxX,game.x));
-      game.z=Math.max(BOUNDS.minZ,Math.min(BOUNDS.maxZ,game.z));game.speed=0;
+    for(const obstacle of game.colliders||[]){
+      const dx=game.x-obstacle.x,dz=game.z-obstacle.z,range=(obstacle.radius||.4)+.6,distance=Math.hypot(dx,dz);
+      if(distance<range){const factor=range/Math.max(.001,distance);game.x=obstacle.x+dx*factor;game.z=obstacle.z+dz*factor;game.speed*=.8;}
+    }
+    const bounds=game.bounds||BOUNDS;
+    if(game.x<bounds.minX||game.x>bounds.maxX||game.z<bounds.minZ||game.z>bounds.maxZ){
+      game.x=Math.max(bounds.minX,Math.min(bounds.maxX,game.x));
+      game.z=Math.max(bounds.minZ,Math.min(bounds.maxZ,game.z));game.speed=0;
       if(game.edgeCooldown===0){events.push('edge');game.edgeCooldown=3;}
     }
     game.traveled+=Math.hypot(game.x-previous.x,game.z-previous.z);

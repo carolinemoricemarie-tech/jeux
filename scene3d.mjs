@@ -4,6 +4,8 @@ import { BOUNDS, createGame, jumpFrame, JUMP_DURATION } from './engine.mjs';
 import { rearChaseCamera } from './course-camera.mjs';
 import { cyclePose,jumpPose,damp,clamp,advanceLanding,detailPose } from './animation.mjs';
 import {createTrailScene} from './trail-scene.mjs';
+import {CentreScene} from './centre-scene.mjs';
+import {groundHeight} from './terrain.mjs';
 
 const sphereGeometry=new THREE.SphereGeometry(1,24,16);
 const boxGeometry=new THREE.BoxGeometry(1,1,1);
@@ -54,7 +56,9 @@ export async function createPhotoWorld(canvas,options={}){
 export class PonyWorld {
   constructor(canvas,{reducedMotion=false,onLost=()=>{},photos}={}){
     this.canvas=canvas;this.reducedMotion=reducedMotion;this.photos=photos;
-    this.renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'high-performance'});
+    const probe=document.createElement('canvas'),probeGL=probe.getContext('webgl2',{antialias:false}),probeInfo=probeGL?.getExtension('WEBGL_debug_renderer_info');
+    const softwareProbe=probeInfo&&/swiftshader|llvmpipe|software/i.test(probeGL.getParameter(probeInfo.UNMASKED_RENDERER_WEBGL));probeGL?.getExtension('WEBGL_lose_context')?.loseContext();
+    this.renderer=new THREE.WebGLRenderer({canvas,antialias:!softwareProbe,alpha:false,powerPreference:'high-performance'});
     const gl=this.renderer.getContext(),info=gl.getExtension('WEBGL_debug_renderer_info');
     const software=info&&/swiftshader|llvmpipe|software/i.test(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
     this.software=!!software;this.lastRenderAt=-1000;
@@ -235,7 +239,7 @@ export class PonyWorld {
     this.characterTextures ||= new Map();
     const key=id+':'+kind;
     if(!this.characterTextures.has(key)){
-      this.characterTextures.set(key,mountedTextures(kind==='unicorn'?{...images,courseRear:images.unicornRear}:images));
+      this.characterTextures.set(key,mountedTextures(kind==='unicorn'?{...images,courseRear:images.unicornRear}:kind==='white'?{...images,courseRear:images.whiteRear}:images));
     }
     const textures=this.characterTextures.get(key);this.pony.stride=textures.stride;this.pony.jumping=textures.jumping;
     this.pony.mounted.material.map=textures.stride;this.pony.mounted.material.needsUpdate=true;
@@ -244,8 +248,6 @@ export class PonyWorld {
   updatePony(p,needs,time,game,effect,dt){
     const pony=this.pony,stable=this.sceneName==='stable';
     pony.mounted.visible=!stable;pony.standing.visible=stable;
-    const coat=p.kind==='white'?1:0;
-    pony.mounted.material.userData.coat.value=coat;pony.standing.material.userData.coat.value=coat;
     const apply=(texture,pose)=>{
       pose=detailPose(pose);
       if(pony.mounted.material.map!==texture){pony.mounted.material.map=texture;pony.mounted.material.needsUpdate=true;}
@@ -308,7 +310,7 @@ export class PonyWorld {
     if(this.camera.fov!==52){this.camera.fov=52;this.camera.updateProjectionMatrix();}
     if(view!=='trail')this.buildCourse(course);
     let state=game||this.preview;
-    if(game?.status==='finished'){
+    if(game?.status==='finished'&&view!=='trail'){
       if(this.finishedGame!==game){this.finishedGame=game;this.finishTravel=0;}
       this.finishTravel=Math.min(5.7,this.finishTravel+Math.max(dt,.001)*3);
       state={...game,x:game.x-Math.sin(game.heading)*this.finishTravel,z:game.z-Math.cos(game.heading)*this.finishTravel,speed:this.finishTravel<5.7?3:0};
@@ -318,9 +320,11 @@ export class PonyWorld {
       }
     }else{this.finishedGame=null;this.finishTravel=0;}
     this.pony.mounted.visible=true;this.pony.standing.visible=false;
-    this.pony.root.position.set(state.x,0,state.z);this.pony.root.rotation.set(0,state.heading,0);
-    this.shadow.position.set(state.x,.018,state.z);this.shadow.rotation.z=state.heading;
-    const visualHeight=this.pony.body.position.y;
+    const terrainY=view==='trail'?groundHeight(game.theme,state.x,state.z):0,floorY=game?.swimming?Math.max(-.68,terrainY):terrainY;
+    const floating=game?.swimming?Math.sin(time*3.8)*.035:0;
+    this.pony.root.position.set(state.x,floorY+floating,state.z);this.pony.root.rotation.set(0,state.heading,0);
+    this.shadow.position.set(state.x,floorY+.018,state.z);this.shadow.rotation.z=state.heading;this.shadow.visible=!game?.swimming;
+    const visualHeight=this.pony.body.position.y+floorY+floating;
     this.shadow.material.opacity=1-visualHeight*.2;
     const sin=Math.sin(state.heading),cos=Math.cos(state.heading);
     const desired=v(state.x+sin*7.4+cos*3.0,4.3+visualHeight*.25,state.z+cos*7.4-sin*3.0);
@@ -335,7 +339,7 @@ export class PonyWorld {
     this.canvas.dataset.cameraX=String(this.camera.position.x);this.canvas.dataset.cameraZ=String(this.camera.position.z);
     this.canvas.dataset.horseX=String(state.x);this.canvas.dataset.horseZ=String(state.z);
     this.canvas.dataset.ponyKind=p.kind||'bay';
-    if(view==='trail'){this.canvas.dataset.theme=game.theme;this.renderer.render(activeScene,this.camera);return;}
+    if(view==='trail'){this.canvas.dataset.theme=game.theme;this.canvas.dataset.swimming=!!game.swimming;this.canvas.dataset.waterDepth=String(game.waterDepth||0);scenery.updateRider?.(state);this.renderer.render(activeScene,this.camera);return;}
     const gate=state.obstacles[state.next];
     for(const [i,g] of this.gates.entries()){
       g.ring.visible=i===state.next;g.sprite.visible=i>=state.next;g.sprite.material.opacity=1;
@@ -356,4 +360,11 @@ export class PonyWorld {
     }
     a.needsUpdate=true;this.renderer.render(this.arena,this.camera);
   }
+  renderCentre(state,character,dt){
+    const now=performance.now();if(this.software&&now-this.lastRenderAt<1000/30-1)return null;this.lastRenderAt=now;
+    if(!this.centreScene)this.centreScene=new CentreScene(this.photos,{shadowSize:this.shadowSize});
+    if(this.sceneName!=='centre'){this.sceneName='centre';this.centreScene.cameraReady=false;this.resize();this.renderer.shadowMap.needsUpdate=true;}
+    this.camera.fov=58;this.camera.updateProjectionMatrix();const location=this.centreScene.renderState(state,character,this.camera,dt);this.renderer.render(this.centreScene.scene,this.camera);this.canvas.dataset.centreX=state.player.x.toFixed(2);this.canvas.dataset.centreZ=state.player.z.toFixed(2);return location;
+  }
+  centreGroundPoint(x,y){return this.centreScene?.groundPoint(x,y,this.canvas.getBoundingClientRect(),this.camera);}
 }

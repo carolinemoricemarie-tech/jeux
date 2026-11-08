@@ -44,5 +44,11 @@ export class GameAudio {
     for(const [i,n] of [523.25,659.25,783.99,1046.5].entries())this.tone(t+i*.13,n,.7,.04,'triangle');
   }
   firework(){if(this.ctx)this.noiseBurst(this.ctx.currentTime,.24,.065,350,.6);}
-  stop(){for(const node of this.nodes){try{node.stop();}catch{}}this.nodes.clear();this.distance=0;this.lastCue=null;}
+  ambience(theme,dt,wet=false){
+    if(!this.ctx||!this.enabled)return;if(this.ambientTheme!==theme){this.ambientTheme=theme;this.ambientWait=0;}
+    this.ambientWait-=dt;if(this.ambientWait>0)return;const now=this.ctx.currentTime;
+    if(theme==='beach'){this.noiseBurst(now,1.8,wet?.045:.025,wet?650:380,.3);this.ambientWait=2.1;}
+    else{for(let i=0;i<3;i++)this.tone(now+i*.14,1700+i*370,.09,.012);this.ambientWait=10+Math.random()*7;}
+  }
+  stop(){for(const node of this.nodes){try{node.stop();}catch{}}this.nodes.clear();this.distance=0;this.lastCue=null;this.ambientWait=0;}
 }

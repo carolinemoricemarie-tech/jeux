@@ -5,12 +5,12 @@ import {createTrail,TRAILS} from '../trails.mjs';
 import {createPaddock,paddockCommand,advancePaddock} from '../paddock.mjs';
 import {visitPortal,advanceEstate,ZONES} from '../estate.mjs';
 import {createStable,restoreStable,care,fitTack,prepareForRide,settleRide} from '../stable.mjs';
-import {PONIES,coatPixel,childProtection} from '../ponies.mjs';
+import {PONIES} from '../ponies.mjs';
 
 function runToEnd(g,{jumps=false,input={}}={}){
   for(let i=0;i<40000&&g.status==='playing';i++){
     if(jumps&&timeToTarget(g)<JUMP_PREPARATION+JUMP_FLIGHT*.5)jump(g);
-    advance(g,1/120,input);
+    if(g.activity==='trail'){const t=g.waypoints[g.nextWaypoint],angle=Math.atan2(-(t.x-g.x),-(t.z-g.z))-g.heading,delta=Math.atan2(Math.sin(angle),Math.cos(angle));advance(g,1/120,{up:true,left:delta>.02,right:delta<-.02});}else advance(g,1/120,input);
   }
   return g;
 }
@@ -40,7 +40,7 @@ test('Le guidage respecte le décompte et la pause ; aucun guidage pour Louane o
     }
   }
 });
-test('Les trois balades se terminent pour les deux enfants aux trois allures, sans obstacles',()=>{
+test('Les trois balades se parcourent en pilotage manuel pour les deux enfants aux trois allures',()=>{
   for(const id of Object.keys(TRAILS))for(const character of ['emmy','louane'])for(const pace of Object.keys(PACES)){
     const g=runToEnd(createTrail(id,pace,{character}));assert.equal(g.status,'finished',id+' '+character+' '+pace);assert.equal(g.nextWaypoint,g.waypoints.length);assert.equal(g.obstacles.length,0);assert.equal(g.bumps,0);
   }
@@ -80,16 +80,4 @@ test('Les balades ne créent pas de record de saut et les records d’Emmy et Lo
   const s=createStable(),trail=runToEnd(createTrail());settleRide(s,'etoile',trail);assert.equal(s.walks,1);assert.equal(s.rides,0);assert.deepEqual(s.records,{});assert.equal(settleRide(s,'etoile',trail),false);
   for(const character of ['emmy','louane']){const g=createGame('gentle','prairie',{character});g.status='finished';g.cleared=character==='emmy'?10:8;g.distance=10;settleRide(s,'noisette',g);}
   assert.equal(s.records['emmy:prairie'].clear,10);assert.equal(s.records['louane:prairie'].clear,8);assert.deepEqual(restoreStable(JSON.stringify(s)).records,s.records);
-});
-test('Les robes sont distinctes et la recoloration conserve la peau et les habits des enfants',()=>{
-  const brown=[145,78,37];assert.notDeepEqual(coatPixel(...brown,'white'),brown);assert.notDeepEqual(coatPixel(...brown,'unicorn'),coatPixel(...brown,'white'));
-  for(const character of ['emmy','louane']){
-    const pixels=new Uint8Array(200*200*4),paint=(x,y,color)=>pixels.set([...color,255],(y*200+x)*4);
-    for(let y=0;y<200;y++)for(let x=0;x<200;x++)paint(x,y,brown);
-    for(let y=33;y<65;y++)for(let x=34;x<51;x++)paint(x,y,character==='emmy'?[130,150,128]:[170,140,175]);
-    for(let y=65;y<96;y++)for(let x=37;x<51;x++)paint(x,y,[185,160,135]);
-    for(let y=18;y<29;y++)for(let x=39;x<52;x++)paint(x,y,[220,177,150]);
-    const protection=childProtection(pixels,200,200,2,character);
-    assert.equal(protection[23*200+45],1);assert.equal(protection[45*200+42],1);assert.equal(protection[80*200+44],1);assert.equal(protection[45*200+85],0);assert.equal(protection[45*200+54],0);
-  }
 });

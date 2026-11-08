@@ -77,26 +77,17 @@ export function mountedTextures(photos){
 export function horseMaterial(map,{rear=false}={}){
   const Material=rear?THREE.MeshBasicMaterial:THREE.SpriteMaterial;
   const m=new Material({map,transparent:true,alphaTest:.12,depthWrite:true,toneMapped:false,fog:true});
-  m.userData.coat={value:0};
   m.userData.poseMix={value:0};m.userData.poseDelta={value:0};
   m.onBeforeCompile=shader=>{
-    shader.uniforms.coatKind=m.userData.coat;
     shader.uniforms.poseMix=m.userData.poseMix;shader.uniforms.poseDelta=m.userData.poseDelta;
-    shader.fragmentShader='uniform float coatKind;\nuniform float poseMix;\nuniform float poseDelta;\n'+shader.fragmentShader;
+    shader.fragmentShader='uniform float poseMix;\nuniform float poseDelta;\n'+shader.fragmentShader;
     const sample=THREE.ShaderChunk.map_fragment.replace('vec4 sampledDiffuseColor = texture2D( map, vMapUv );',`vec4 firstPose=texture2D(map,vMapUv);
       vec4 secondPose=texture2D(map,vMapUv+vec2(poseDelta,0.));
       float poseAlpha=mix(firstPose.a,secondPose.a,poseMix);
       vec4 sampledDiffuseColor=vec4(mix(firstPose.rgb*firstPose.a,secondPose.rgb*secondPose.a,poseMix)/max(poseAlpha,.0001),poseAlpha);`);
-    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',sample+`
-      vec3 c=diffuseColor.rgb;
-      float mask=smoothstep(.012,.045,c.r)*smoothstep(1.25,1.55,c.r/max(.003,c.g))*smoothstep(1.8,2.2,c.r/max(.003,c.b));
-      ${rear?'mask*=1.-smoothstep(.58,.66,vMapUv.y);':''}
-      float lum=dot(c,vec3(.299,.587,.114));
-      vec3 replacement=vec3(.22+sqrt(max(0.,lum))*.95);
-      if(coatKind>.5)diffuseColor.rgb=mix(c,replacement,mask);
-    `);
+    shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',sample);
   };
-  m.customProgramCacheKey=()=> 'realistic-horse-coat-motion-v3-'+rear;return m;
+  m.customProgramCacheKey=()=> 'native-photo-pose-v4-'+rear;return m;
 }
 export function photoPony(photos){
   const root=new THREE.Group(),body=new THREE.Group();root.add(body);

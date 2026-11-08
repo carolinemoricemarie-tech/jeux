@@ -2,7 +2,7 @@ import { createPaddock,advancePaddock,paddockCommand,targetPlayer,LUNGE_RADIUS }
 import { CHARACTERS } from './characters.mjs';
 import { actorAtlas,drawActor } from './actor-atlas.mjs';
 import { walkingPose,idlePose,cyclePose,damp,facingDirection,detailPose,clamp } from './animation.mjs';
-import { PONIES,coatImage } from './ponies.mjs';
+import { PONIES } from './ponies.mjs';
 import { ZONES,projectEstate,advanceEstate,visitPortal } from './estate.mjs';
 function atlas(image,columns,rows){
   const w=Math.floor(image.width/columns),h=Math.floor(image.height/rows),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
@@ -16,12 +16,13 @@ function atlas(image,columns,rows){
   return{image,w,h,columns,cells,maxHeight:Math.max(...cells.map(b=>b.bottom-b.top+1))};
 }
 export class PaddockRoom {
-  constructor(root,photos,{audio,onReward=()=>{},onEnterBox=()=>{},onZone=()=>{},reducedMotion=false}={}){
-    this.root=root;this.photos=photos;this.audio=audio;this.onReward=onReward;this.onEnterBox=onEnterBox;this.onZone=onZone;this.reduced=reducedMotion;
+  constructor(root,photos,{audio,onReward=()=>{},onEnterBox=()=>{},onZone=()=>{},onExit=()=>{},reducedMotion=false}={}){
+    this.root=root;this.photos=photos;this.audio=audio;this.onReward=onReward;this.onEnterBox=onEnterBox;this.onZone=onZone;this.onExit=onExit;this.reduced=reducedMotion;
     this.canvas=root.querySelector('canvas');this.ctx=this.canvas.getContext('2d');this.held=new Set();this.state=createPaddock();this.cache=new Map();
     this.ponyAtlas=atlas(photos.ponyFree,4,4);this.horseMotion=actorAtlas(photos.ponyFree,4,4);this.ballAtlas=atlas(photos.playBall,1,1);this.lastRender=-1000;
     for(const b of root.querySelectorAll('[data-paddock-command]'))b.addEventListener('click',()=>{this.audio.unlock();const command=b.dataset.paddockCommand;if(paddockCommand(this.state,command)){if(command==='call')this.audio.snort();const messages={ball:'Le ballon est lancé ! Ton poney part le chercher.',call:'Viens, mon poney !',lunge:'Rejoins le centre, puis choisis une allure.',free:'À vous de jouer ! Déplace-toi ou lance le ballon.',reverse:'On change de main en douceur.',stop:'Arrêt. Ton poney se repose.',walk:'Au pas, tout tranquillement.',trot:'Au trot !',gallop:'Au galop ! Regarde ton poney courir.'};this.message(messages[command]);this.updateUI();}});
     root.querySelector('#paddock-pause').addEventListener('click',()=>{this.state.status=this.state.status==='playing'?'paused':'playing';this.release();this.updateUI();});
+    root.querySelector('#paddock-exit').addEventListener('click',()=>{this.release();this.onExit();});
     this.canvas.addEventListener('pointerdown',event=>{
       if(this.state.status!=='playing')return;
       const b=this.canvas.getBoundingClientRect(),x=(event.clientX-b.x)/b.width*1200,y=(event.clientY-b.y)/b.height*800;
@@ -35,8 +36,8 @@ export class PaddockRoom {
   }
   open(character,ponyId='noisette'){
     this.pony=PONIES[ponyId]||PONIES.noisette;
-    const base=this.pony.kind==='unicorn'?this.photos.unicornFree:coatImage(this.photos.ponyFree,this.pony.kind);
-    const gallop=this.pony.kind==='unicorn'?base:coatImage(this.photos.ponyGallop,this.pony.kind);
+    const base=this.pony.kind==='unicorn'?this.photos.unicornFree:this.pony.kind==='white'?this.photos.whiteFree:this.photos.ponyFree;
+    const gallop=this.pony.kind==='bay'?this.photos.ponyGallop:base;
     this.horseMotion=actorAtlas(base,4,4);this.gallopMotion=actorAtlas(gallop,4,4);
     this.character=character;const image=this.photos.characters[character]?.paddock||this.photos.demoPaddock;
     if(!image)throw new Error('Personnage de l’enclos indisponible.');
@@ -65,7 +66,7 @@ export class PaddockRoom {
     const portals=this.root.querySelector('#estate-portals');portals.replaceChildren();
     if(s.mode==='free')for(const portal of ZONES[s.zone].portals){
       const b=document.createElement('button'),point=projectEstate(portal.x,portal.z,s.zone);b.className='estate-portal';b.dataset.portal=portal.id;b.textContent=(s.portal===portal.id?'→ ':'')+portal.label;b.style.left=point.x/12+'%';b.style.top=(point.y-28)/8+'%';
-      b.addEventListener('click',()=>{if(visitPortal(s,portal.id)){this.message('Ta cavalière marche vers '+portal.label.toLowerCase()+'.');this.updateUI();}});portals.append(b);
+      b.addEventListener('click',()=>{if(s.zone==='paddock'&&portal.id==='yard'){this.release();this.onExit();return;}if(visitPortal(s,portal.id)){this.message('Ta cavalière marche vers '+portal.label.toLowerCase()+'.');this.updateUI();}});portals.append(b);
     }
   }
   step(dt,input){
